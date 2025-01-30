@@ -2,6 +2,7 @@ def process_mp(
     df,
     placekeys_to_drop,
     categories_to_drop,
+    dir_path,
     malls_subcategory_column="SUB_CATEGORY",
     placekey_column="PLACEKEY",
     parent_place_column="PARENT_PLACEKEY",
@@ -165,5 +166,17 @@ def process_mp(
     parent_placekey_dfs=parent_placekey_dfs.reset_index(drop=True)
     df_filtered=df_filtered.reset_index(drop=True)
     print("Monthly patterns processing done!")
-
+    
+    output_path = os.path.join(dir_path, "processed_mp.csv")
+    df_filtered.to_csv(output_path,index=False)
+    print(f"File saved successfully at: {output_path}")
+    
+    output_path = os.path.join(dir_path, "parent_placekey_dfs.csv")
+    parent_placekey_dfs.to_csv(output_path,index=False)
+    print(f"File saved successfully at: {output_path}")
+    
+    output_path = os.path.join(dir_path, "unidentified_parent_locations.csv")
+    df_unidentified_parent_locations.to_csv(output_path,index=False)
+    print(f"File saved successfully at: {output_path}")
+    
     return df_filtered,parent_placekey_dfs,df_unidentified_parent_locations
