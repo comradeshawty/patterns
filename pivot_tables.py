@@ -81,3 +81,37 @@ def category_processing(df_filtered,dir_path):
     category_df.to_excel(output_path, engine="openpyxl")
     print(f"File saved successfully at: {output_path}")
     return category_df
+
+def parent_pivot_table(df,parent_placekey_dfs,dir_path):
+  filtered_df = df[df["PARENT_PLACEKEY"].notnull()]
+  pivot_data = []
+
+  for _, parent_row in parent_placekey_dfs.iterrows():
+      # Get the PLACEKEY and building from the current row in parent_placekey_dfs
+      parent_placekey = parent_row["PLACEKEY"]
+      parent_building = parent_row["LOCATION_NAME"]
+      parent_count = parent_row["Median RAW_VISIT_COUNTS"]
+
+      # Filter rows from filtered_df where PARENT_PLA matches the parent PLACEKEY
+      child_rows = filtered_df[filtered_df["PARENT_PLACEKEY"] == parent_placekey]
+
+      # Add data to the pivot table structure
+      for _, child_row in child_rows.iterrows():
+          pivot_data.append({
+              "Parent Placekey":parent_placekey,
+              "Parent Location": parent_building,
+              "Parent Visit Counts":parent_count,
+              "Child Location Name": child_row["LOCATION_NAME"],  # Use LOCATION_N from child rows
+              **child_row.to_dict()  # Include the rest of the columns in filtered_df
+          })
+
+  # Step 5: Create a DataFrame from the pivot data
+  pivot_df = pd.DataFrame(pivot_data)
+
+  # Step 6: Set a multi-index with placekey and Location Name
+  pivot_df.set_index(["Parent Placekey","Parent Location","Parent Visit Counts", "Child Location Name"], inplace=True)
+  output_path = os.path.join(dir_path, "parent_pivot.xlsx")
+  pivot_df.to_excel(output_path, engine="openpyxl")
+  print(f"File saved successfully at: {output_path}")
+
+  return pivot_df
