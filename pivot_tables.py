@@ -83,9 +83,9 @@ def category_processing(df_filtered,dir_path):
     return category_df
 
 def parent_pivot_table(df,parent_placekey_dfs,dir_path):
+
   filtered_df = df[df["PARENT_PLACEKEY"].notnull()]
   pivot_data = []
-
   for _, parent_row in parent_placekey_dfs.iterrows():
       # Get the PLACEKEY and building from the current row in parent_placekey_dfs
       parent_placekey = parent_row["PLACEKEY"]
@@ -108,10 +108,21 @@ def parent_pivot_table(df,parent_placekey_dfs,dir_path):
   # Step 5: Create a DataFrame from the pivot data
   pivot_df = pd.DataFrame(pivot_data)
 
-  # Step 6: Set a multi-index with placekey and Location Name
+  # Step 6: Set a multi-index with Building and Location Name
   pivot_df.set_index(["Parent Placekey","Parent Location","Parent Visit Counts", "Child Location Name"], inplace=True)
   output_path = os.path.join(dir_path, "parent_pivot.xlsx")
   pivot_df.to_excel(output_path, engine="openpyxl")
   print(f"File saved successfully at: {output_path}")
 
-  return pivot_df
+  shared_df=pd.concat([parent_placekey_dfs,filtered_df],copy=True)
+  shared_df.drop_duplicates(subset='PLACEKEY',inplace=True,ignore_index=True)
+
+  output_path = os.path.join(dir_path, "parent_child_df.csv")
+  shared_df.to_csv(output_path,index=False)
+  print(f"File saved successfully at: {output_path}")
+
+  output_path = os.path.join(dir_path, "shared_placekeys_no_parent.csv")
+  filtered_df.to_csv(output_path,index=False)
+  print(f"File saved successfully at: {output_path}")
+
+  return pivot_df,filtered_df,shared_df
