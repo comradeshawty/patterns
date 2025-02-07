@@ -1,5 +1,42 @@
 import pandas as pd
 import placekey as pk
+def get_poi_visits(month, day_str, hour):
+    poi_visits_all = []
+    for i in range(1,5):
+        poi_visits = pd.read_csv(f'2020/{month}/{day_str}/{hour}/patterns-part{i}.csv.gz', compression="gzip")
+        poi_visits_all.append(poi_visits)
+    poi_visits = pd.concat([x for x in poi_visits_all])
+    return poi_visits
+
+# Iterate visit flows
+poi_visits = get_poi_visits(f"{month_v3}", f"{day_v3}", f"{hour_v3}")
+
+flows_unit = []
+
+for i, row in enumerate(poi_visits.itertuples()):
+    if row.visitor_home_cbgs == "{}":
+        continue
+    else:
+        origin = eval(row.visitor_home_cbgs)
+        destination = row.poi_cbg
+        for key, value in origin.items():
+            try:
+                o = int(key)
+                v = value
+                d = int(destination)
+                flows_unit.append([str(o).zfill(12), str(d).zfill(12), v])
+            except:
+                pass
+poi_visits_flow_all = pd.DataFrame(flows_unit, columns=["cbg_o", "cbg_d", "visitor_flows"])
+
+poi_visits_flow_all_geo = pd.merge(left=poi_visits_flow_all, right=cbgs_shp[["cbg", "ct", "county_fip", "StateFIPS"]], 
+                                   left_on="cbg_o", right_on="cbg")
+poi_visits_flow_all_geo = pd.merge(left=poi_visits_flow_all_geo, right=cbgs_shp[["cbg", "ct", "county_fip", "StateFIPS"]], 
+                                   left_on="cbg_d", right_on="cbg", suffixes=["__o", "__d"])
+poi_visits_flow_all_geo = poi_visits_flow_all_geo.drop(["cbg__o", "cbg__d"], axis=1)
+poi_visits_flow_all_geo = poi_visits_flow_all_geo.rename({"ct__o": "ct_o", "ct__d": "ct_d",
+                                                          "StateFIPS__o": "state_o", "StateFIPS__d": "state_d", 
+                                                         "county_fip__o":"county_o", "county_fip__d":"county_d"}, axis=1)
 
 def flag_placekey_geometry_mismatches_with_placekey(df, placekey_column="PLACEKEY", parent_placekey_column="PARENT_PLACEKEY",
                                                     distance_threshold=100, verbose=False):
