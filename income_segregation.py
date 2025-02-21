@@ -1,5 +1,46 @@
-import numpy as np
 import pandas as pd
+import geopandas as gpd
+import numpy as np
+from scipy.spatial import cKDTree
+
+def get_income_data():
+  income_data = pd.DataFrame({
+    'Income Bracket': [
+        'Less than $10,000', '$10,000 to $14,999', '$15,000 to $24,999',
+        '$25,000 to $34,999', '$35,000 to $49,999', '$50,000 to $74,999',
+        '$75,000 to $99,999', '$100,000 to $149,999', '$150,000 to $199,999', '$200,000 or more'],
+    'Percentage': [5.3, 4.6, 7.7, 8.3, 10.4, 17.2, 13.2, 15.9, 8.1, 9.3]})
+  total_households = 471767
+  return income_data,total_households
+
+def impute_missing_values(gdf, columns_to_impute='median_hh_income', k=5):
+    """
+    Impute missing values in the GeoDataFrame using spatial nearest neighbors with an imputed_flag column.
+    """
+    gdf=gdf.to_crs(epsg=32616)
+    coords = np.array(list(zip(gdf.geometry.centroid.x, gdf.geometry.centroid.y)))
+    tree=cKDTree(coords)
+    gdf['imputed_flag'] = 0
+    for idx, row in gdf.iterrows():
+        if pd.isna(row[columns_to_impute]):
+            distances, indices = tree.query(coords[idx], k=k)
+            valid_neighbors = gdf.iloc[indices][columns_to_impute].dropna()
+
+            if not valid_neighbors.empty:
+                imputed_values = valid_neighbors.mean()
+                gdf.loc[idx, columns_to_impute] = imputed_values
+                gdf.loc[idx, 'imputed_flag'] = 1  
+    return gdf
+
+def calculate_income_quantiles_cbsa(total_households, income_data, cbg_gdf):
+    income_data['Households'] = (income_data['Percentage'] / 100) * total_households
+    income_data['Cumulative Households'] = income_data['Households'].cumsum()
+    quantiles = [0, total_households * 0.25, total_households * 0.5, total_households * 0.75, total_households]
+    income_data['cbsa_income_quantile'] = pd.cut(income_data['Cumulative Households'], bins=quantiles,
+                                            labels=['low', 'lower_middle', 'upper_middle', 'high'], include_lowest=True)
+    cbg_gdf['income_quantile'] = pd.qcut(cbg_gdf['median_hh_income'], 4, labels=['low', 'lower_middle', 'upper_middle', 'high'])
+
+    return cbg_gdf
 
 def compute_income_segregation(df, cbg_gdf):
     """
