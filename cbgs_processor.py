@@ -1,3 +1,14 @@
+import json
+import pandas as pd
+import geopandas as gpd
+import numpy as np
+from collections import Counter
+
+def cbg_to_str(df,column):
+    df.rename(columns={column:'cbg'},inplace=True)
+    df['cbg']=df['cbg'].astype(str).str.lstrip('0')
+    return df
+    
 def fix_malformed_dict_str(s):
     """Fixes malformed dictionary strings by ensuring they end with a closing brace."""
     if not s.endswith("}"):
@@ -72,5 +83,4 @@ def process_cbg_data_v2(df_m, cbg_gdf, raw_visitor_col, visitor_home_cbgs_col):
         return adjusted_cbg_counter
     df_m["adjusted_cbg_visitors"] = df_m.apply(process_row, axis=1)
     print(f"Number of rows not able to be parsed: {unparsed_count}")
-
     return df_m
