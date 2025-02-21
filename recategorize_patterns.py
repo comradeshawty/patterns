@@ -1,28 +1,18 @@
-from os import remove
 import pandas as pd
-from datetime import datetime
-import collections, functools, operator
-from geopy.distance import geodesic
-from shapely.geometry import Polygon
+from collections import Counter
+from shapely.geometry import Polygon,Point
 import json
 from shapely.wkt import loads
 pd.set_option('display.max_columns', None)
+import geopandas as gpd
 import numpy as np
 import regex as re
 import matplotlib.pyplot as plt
 import seaborn as sns
-import geopandas as gpd
-import pandas as pd
 from rapidfuzz import fuzz
-import geopandas as gpd
-import numpy as np
-from shapely.geometry import Point
 from scipy.spatial import cKDTree
-from ast import literal_eval
 import ast
-from collections import Counter
-import geopandas as gpd
-import h5py
+from ast import literal_eval
 SUB_CATEGORY_MAPPING={'Restaurants':['Full-Service Restaurants','Casino Hotels','Limited-Service Restaurants'],
                       'Coffee Shops, Snacks & Bakeries':['Snack and Nonalcoholic Beverage Bars','Bakeries and Tortilla Manufacturing','Confectionery and Nut Stores','Baked Goods Stores'],
                       'Retail for Basic Necessities': ['All Other Health and Personal Care Stores','All Other Specialty Food Stores','Meat Markets','Fruit and Vegetable Markets','Fish and Seafood Markets',
@@ -563,7 +553,6 @@ def update_real_estate_info(mp):
     return mp
 
 def preprocess_mp(mp):
-
   mp.drop_duplicates(subset='PLACEKEY', inplace=True, ignore_index=True)
   mp.dropna(subset='PLACEKEY', inplace=True, ignore_index=True)
   mp.dropna(subset='VISITOR_HOME_CBGS', inplace=True, ignore_index=True)
@@ -598,17 +587,14 @@ def preprocess_mp(mp):
 def process_pois_and_stops(mp, stops, radius=250):
     #stops = stops.loc[stops['TOP_CATEGORY'] == 'Urban Transit Systems'].copy()
     #stops.loc[:, 'LOCATION_NAME'] = stops['LOCATION_NAME'].str.replace(r'^Birmingham Jefferson County Transit Authority\s*', '', regex=True)
-
     stops.loc[:, 'geometry'] = stops.apply(lambda row: Point(row['stop_lon'], row['stop_lat']), axis=1)
     stops_gdf = gpd.GeoDataFrame(stops, geometry='geometry', crs="EPSG:4326").to_crs(epsg=32616)
     mp=mp.copy()
     mp.loc[:, 'geometry'] = mp.apply(lambda row: Point(row['LONGITUDE'], row['LATITUDE']), axis=1)
     pois_gdf = gpd.GeoDataFrame(mp, geometry='geometry', crs="EPSG:4326").to_crs(epsg=32616)
-
     stop_coords = list(zip(stops_gdf.geometry.x, stops_gdf.geometry.y))
     poi_coords = list(zip(pois_gdf.geometry.x, pois_gdf.geometry.y))
     stop_tree = cKDTree(stop_coords)
-
     results = []
     for idx, poi_coord in enumerate(poi_coords):
         stop_indices = stop_tree.query_ball_point(poi_coord, radius)
@@ -616,26 +602,22 @@ def process_pois_and_stops(mp, stops, radius=250):
         valid_stop_indices = [i for i, dist in zip(stop_indices, valid_distances) if dist < radius]
         nearby_stop_names = [stops_gdf.iloc[i]['stop_name'] for i in valid_stop_indices]
         nearby_stop_ids = [stops_gdf.iloc[i]['stop_id'] for i in valid_stop_indices]
-
         results.append({
             'PLACEKEY': pois_gdf.iloc[idx]['PLACEKEY'],
             'nearby_stops': nearby_stop_names,
             'nearby_stop_ids':nearby_stop_ids,
             'nearby_stop_distances': valid_distances})
-
     nearby_pois = pd.DataFrame(results)
     nearby_pois = nearby_pois[(nearby_pois['nearby_stops'].apply(lambda x: len(x) > 0)) &
                               (nearby_pois['nearby_stop_distances'].apply(lambda x: len(x) > 0))].reset_index(drop=True)
-
     mp = mp.merge(nearby_pois, on="PLACEKEY", how="left")
     mp.loc[:, 'nearby_stops'] = mp['nearby_stops'].fillna('[]').apply(lambda x: literal_eval(x) if isinstance(x, str) else x)
     mp.loc[:, 'nearby_stop_distances'] = mp['nearby_stop_distances'].fillna('[]')
     mp.loc[:, 'num_nearby_stops'] = mp['nearby_stops'].apply(len)
-
     mp.drop_duplicates(subset="PLACEKEY", inplace=True, ignore_index=True)
     mp.dropna(subset="PLACEKEY", inplace=True, ignore_index=True)
-
     return mp
+  
 def extract_visit_counts_by_day(mp):
     def parse_popularity_by_day(value):
         if isinstance(value, str):
@@ -650,8 +632,8 @@ def extract_visit_counts_by_day(mp):
     for day in weekdays:
         mp[f'visit_count_{day.lower()}'] = mp['POPULARITY_BY_DAY'].apply(lambda x: x.get(day, 0))
     return mp
-def drop_duplicates_with_priority(mp, save_path='/content/drive/MyDrive/data/removed_children.csv'):
 
+def drop_duplicates_with_priority(mp, save_path='/content/drive/MyDrive/data/removed_children.csv'):
     mp['VISITOR_HOME_CBGS_STR'] = mp['VISITOR_HOME_CBGS'].astype(str)
     mp_sorted = mp[mp['PARENT_PLACEKEY'].notna()].copy()
     mp_sorted = mp_sorted.sort_values(by=['PARENT_PLACEKEY', 'VISITOR_HOME_CBGS_STR', 'RAW_VISIT_COUNTS'], ascending=[True, True, False])
@@ -661,7 +643,6 @@ def drop_duplicates_with_priority(mp, save_path='/content/drive/MyDrive/data/rem
     cleaned_mp = cleaned_mp.drop(columns=['VISITOR_HOME_CBGS_STR'])
     cleaned_mp.sort_values(by='RAW_VISIT_COUNTS', ascending=False, inplace=True)
     cleaned_mp.reset_index(drop=True, inplace=True)
-
     return cleaned_mp, dropped_rows
 
 def three_cat_label(mp):
@@ -678,40 +659,17 @@ def convert_placekey_to_stop(mp, placekey, stop_name):
   return mp
   
 def update_mp_from_w(mp, w, columns_to_update):
-
     w_lookup = {col: w.set_index("PLACEKEY")[col].to_dict() for col in columns_to_update}
-
-    # Ensure PLACEKEY is indexed for faster lookup in mp
     if "PLACEKEY" not in mp.columns:
         raise ValueError("PLACEKEY column is missing in mp")
-
-    # Efficiently update only differing values
     for col in columns_to_update:
         if col in mp.columns:
-            # Get the values from w where PLACEKEY matches
             w_values = mp["PLACEKEY"].map(w_lookup[col])
-
-            # Find where values are different and update only those
             mask = (w_values.notna()) & (mp[col] != w_values)
             mp.loc[mask, col] = w_values[mask]
-
     return mp
 
 def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_duplicate_pois.csv"):
-    """
-    Identifies and merges sequences of 5+ rows with identical visit counts, VISITOR_HOME_CBGS,
-    and the same polygon suffix. Replaces them with a single row and saves the removed rows to a CSV.
-
-    Args:
-        mp (pd.DataFrame): The input dataframe.
-        save_path (str): File path to save removed rows.
-
-    Returns:
-        pd.DataFrame: Cleaned dataframe with merged POIs.
-        pd.DataFrame: Dropped duplicate rows.
-    """
-
-    # Extract polygon identifier from PLACEKEY (everything after @)
     category_list=['Accounting, Tax Preparation, Bookkeeping, and Payroll Services',
        'Depository Credit Intermediation',
        'Agencies, Brokerages, and Other Insurance Related Activities',
@@ -725,18 +683,12 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
        'Specialty (except Psychiatric and Substance Abuse) Hospitals',
        'Other Ambulatory Health Care Services', 'Offices of Dentists',
        'All Other Ambulatory Health Care Services']
-
     mp["POLYGON_ID"] = mp["PLACEKEY"].str.split("@").str[1]
-
-    # Convert VISITOR_HOME_CBGS to a string for exact comparison
     mp["VISITOR_HOME_CBGS_STR"] = mp["VISITOR_HOME_CBGS"].astype(str)
     mp=mp.sort_values(by='RAW_VISIT_COUNTS',ascending=False)
-    # Group by polygon, RAW_VISIT_COUNTS, and VISITOR_HOME_CBGS
     grouped = mp.groupby(["POLYGON_ID", "VISITOR_HOME_CBGS_STR","TOP_CATEGORY"])
-
     merged_rows = []
     removed_rows = []
-
     for (_, visit_count, home_cbgs), group in grouped:
         if len(group) >= 6:  # Only process sequences with 5+ duplicates
             first_row = group.iloc[0].copy()  # Keep the first row's values
@@ -782,12 +734,9 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
     category_lookup = {
         subcategory: category
         for category, subcategories in sub_category_mapping.items()
-        for subcategory in subcategories
-    }
+        for subcategory in subcategories}
 
-    mp["place_category"] = mp["SUB_CATEGORY"].map(category_lookup).fillna(
-        mp["TOP_CATEGORY"].map(category_lookup)
-    ).fillna("Other")  # Default to "Other"
+    mp["place_category"] = mp["SUB_CATEGORY"].map(category_lookup).fillna(mp["TOP_CATEGORY"].map(category_lookup)).fillna("Other")  # Default to "Other"
     def map_subcategory(row):
         top_category = row["SUB_CATEGORY"]
         place_category = row["place_category"]
@@ -797,10 +746,6 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
                     return subcategory
         return f"Other {place_category}"  # If no match is found, return 'Other {place_category}'
     mp["place_subcategory"] = mp.apply(map_subcategory, axis=1)
-
-
- 
-    # Step 2: Define keyword-based categories with exact matches
     category_keywords = {
         "Schools": ["School", "Schools", "Academy", "Sch", "Montessori", "Summer Camp"],
         "City/Outdoors": ["Recreation Center", "City", "Playground", "Hiking", "Trail", "Courthouse"],
@@ -841,14 +786,12 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
         update_mask = (name_match | tag_match) & (mp["place_category"] == "Other")
         mp.loc[update_mask, "place_category"] = category
 
-    # Step 5: Special case for 'Pharmacy' exact match
     mp.loc[mp['LOCATION_NAME'].str.contains('Pharmacy', case=True, na=False), 'place_category'] = 'Retail for Basic Necessities'
     mp.loc[mp['LOCATION_NAME'].str.contains('Recreation Center', case=True, na=False), 'place_category'] = 'City/Outdoors'
     mp.loc[mp["LOCATION_NAME"].str.contains("|".join(coffee_keywords), case=True, na=False),'place_category']=='Coffee Shops, Snacks & Bakeries'
     return mp
 
 def assign_specific_subcategories(mp): 
-    # Define exact case-sensitive matches
     keyword_mappings = {
         'Coffee Shop': ['Starbucks',"Ohenry's Coffees", 'Costa Coffee','Revelator Coffee'],
         'Donuts': ["Dunkin'",'Krispy Kreme Doughnuts','Shipley Donuts','Daylight Donuts'],
