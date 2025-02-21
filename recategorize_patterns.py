@@ -767,7 +767,7 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
                                            'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']
     }
     coffee_keywords=['Coffee','Bakery','Treats','Creamery','Smoothie','Donuts',"Jeni's Splendid Ice Creams",'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']
-
+    arts_keywords=["Performing Arts","Mural"]
     # Step 3: Standardize LOCATION_NAME and CATEGORY_TAGS
     mp["LOCATION_NAME"] = mp["LOCATION_NAME"].str.strip()
     if "CATEGORY_TAGS" in mp.columns:
@@ -789,6 +789,8 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
     mp.loc[mp['LOCATION_NAME'].str.contains('Pharmacy', case=True, na=False), 'place_category'] = 'Retail for Basic Necessities'
     mp.loc[mp['LOCATION_NAME'].str.contains('Recreation Center', case=True, na=False), 'place_category'] = 'City/Outdoors'
     mp.loc[mp["LOCATION_NAME"].str.contains("|".join(coffee_keywords), case=True, na=False),'place_category']=='Coffee Shops, Snacks & Bakeries'
+    mp.loc[mp["LOCATION_NAME"].str.contains("|".join(arts_keywords), case=True, na=False),'place_category']=='Arts and Culture'
+
     return mp
 
 def assign_specific_subcategories(mp): 
