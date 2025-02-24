@@ -106,4 +106,7 @@ def compute_income_segregation(df, cbg_gdf):
         return segregation
 
     df['income_segregation'] = df['adjusted_cbg_visitors'].apply(segregation_from_dict)
+    null_rows = df[df['income_segregation'].isnull()]
+    null_rows.to_csv('/content/drive/MyDrive/data/null_income_segregation.csv',index=False)
+    df.dropna(subset='income_segregation',inplace=True,ignore_index=True)
     return df
