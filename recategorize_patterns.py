@@ -624,7 +624,8 @@ def convert_placekey_to_stop(mp, placekey, stop_name):
   mp.loc[mp['PLACEKEY'] == placekey, ['LOCATION_NAME', 'TOP_CATEGORY', 'SUB_CATEGORY', 'NAICS_CODE','CATEGORY_TAGS']] = [stop_name,'Urban Transit Systems','Bus and Other Motor Vehicle Transit Systems','485113','Bus Station,Buses']
   return mp
   
-def update_mp_from_w(mp, w, columns_to_update):
+def update_mp_from_w(mp, columns_to_update=['PARENT_PLACEKEY','LOCATION_NAME','TOP_CATEGORY','SUB_CATEGORY','CATEGORY_TAGS','NAICS_CODE']):
+    w=pd.read_excel('/content/drive/MyDrive/data/mp.xlsx')
     w_lookup = {col: w.set_index("PLACEKEY")[col].to_dict() for col in columns_to_update}
     if "PLACEKEY" not in mp.columns:
         raise ValueError("PLACEKEY column is missing in mp")
@@ -651,13 +652,17 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
               TOP_CATEGORY, SUB_CATEGORY, and CATEGORY_TAGS are set as the most common from the group.
             - If less than 75% of the rows share the same TOP_CATEGORY, drop all the rows in the group and save them.
               
+    Additionally, a new column "merged_flag" is created:
+      - For rows resulting from a merge of duplicate groups, merged_flag=True.
+      - For all other rows, merged_flag will be False.
+       
     Parameters:
        mp       : DataFrame containing POI rows.
        save_path: File path where removed duplicate rows will be stored.
        
     Returns:
        cleaned_mp, removed_df
-         cleaned_mp: DataFrame with duplicates merged.
+         cleaned_mp: DataFrame with duplicates merged and merged_flag column added.
          removed_df: DataFrame containing dropped rows.
     """
     # Create temporary columns to group duplicates
@@ -701,9 +706,11 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
             merged["TOP_CATEGORY"] = most_common_top_category
             merged["SUB_CATEGORY"] = most_common_sub_category
             merged["CATEGORY_TAGS"] = most_common_tag_category
+            # Add merged_flag column indicating this row is a merge result.
+            merged["merged_flag"] = True
 
             merged_rows.append(merged)
-            # Mark all rows from the group as processed; if merged row came from the group, remove it from original ones
+            # Mark all rows from the group as processed
             processed_indices.update(group.index.tolist())
             # Save the non-kept rows in group (i.e. group minus the merged row) as removed.
             removed_rows.append(group.drop(merged.name, errors='ignore'))
@@ -720,6 +727,8 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
                 merged["TOP_CATEGORY"] = most_common_top_category
                 merged["SUB_CATEGORY"] = most_common_sub_category
                 merged["CATEGORY_TAGS"] = most_common_tag_category
+                merged["merged_flag"] = True
+
                 merged_rows.append(merged)
                 processed_indices.update(group.index.tolist())
                 removed_rows.append(group.drop(merged.name, errors='ignore'))
@@ -742,10 +751,18 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
         merged_df = pd.DataFrame(merged_rows)
         cleaned_mp = pd.concat([cleaned_mp, merged_df], ignore_index=True)
     
+    # For rows that were not merged, mark merged_flag as False.
+    if "merged_flag" not in cleaned_mp.columns:
+        cleaned_mp["merged_flag"] = False
+    else:
+        # Set merged_flag=False for rows that don't have it (NaN) or were not merged.
+        cleaned_mp["merged_flag"] = cleaned_mp["merged_flag"].fillna(False)
+    
     # Drop temporary columns
     cleaned_mp.drop(columns=["POLYGON_ID", "VISITOR_HOME_CBGS_STR"], inplace=True, errors='ignore')
     
     return cleaned_mp, removed_df
+
 
 def update_category(mp, placekeys, new_category):
     if isinstance(placekeys, str):
