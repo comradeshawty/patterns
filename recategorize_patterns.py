@@ -672,36 +672,31 @@ def update_mp_from_w(mp, w, columns_to_update):
     return mp
 
 def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_duplicate_pois.csv"):
-    category_list=['Accounting, Tax Preparation, Bookkeeping, and Payroll Services',
-       'Depository Credit Intermediation',
-       'Agencies, Brokerages, and Other Insurance Related Activities',
-       'Insurance Carriers', 'Legal Services',
-       'Activities Related to Real Estate',
-       'Activities Related to Credit Intermediation',
-       'Offices of Real Estate Agents and Brokers',
-       'Nondepository Credit Intermediation',
-       'Other Financial Investment Activities','Offices of Other Health Practitioners', 'Offices of Physicians','General Medical and Surgical Hospitals',
-      'Outpatient Care Centers', 'Medical and Diagnostic Laboratories',
-       'Specialty (except Psychiatric and Substance Abuse) Hospitals',
-       'Other Ambulatory Health Care Services', 'Offices of Dentists',
-       'All Other Ambulatory Health Care Services']
     mp["POLYGON_ID"] = mp["PLACEKEY"].str.split("@").str[1]
     mp["VISITOR_HOME_CBGS_STR"] = mp["VISITOR_HOME_CBGS"].astype(str)
     mp=mp.sort_values(by='RAW_VISIT_COUNTS',ascending=False)
-    grouped = mp.groupby(["POLYGON_ID", "VISITOR_HOME_CBGS_STR","TOP_CATEGORY"])
+    grouped = mp.groupby(["POLYGON_ID", "VISITOR_HOME_CBGS_STR"])
+
     merged_rows = []
     removed_rows = []
-    for (_, visit_count, home_cbgs), group in grouped:
-        if len(group) >= 6:  # Only process sequences with 5+ duplicates
-            first_row = group.iloc[0].copy()  # Keep the first row's values
 
+    for (polygon_id, home_cbgs), group in grouped:
+        if len(group) >= 2:  # Only process groups with duplicates
+
+            # Step 2: Prioritize row where parent_flag = 1
+            parent_rows = group[group["parent_flag"] == 1]
+
+            if len(parent_rows) == 1:
+                first_row = parent_rows.iloc[0].copy()  # Keep the parent row
+            else:
+                first_row = group.iloc[0].copy()  # If multiple or none are parents, keep the first row
             # Determine new LOCATION_NAME (Most common TOP_CATEGORY - Most common STREET ADDRESS)
             most_common_top_category = Counter(group["TOP_CATEGORY"]).most_common(1)[0][0]
             most_common_sub_category = Counter(group["SUB_CATEGORY"]).most_common(1)[0][0]
             most_common_tag_category = Counter(group["CATEGORY_TAGS"]).most_common(1)[0][0]
 
             most_common_address = Counter(group["STREET_ADDRESS"]).most_common(1)[0][0]
-            first_row["LOCATION_NAME"] = f"{most_common_top_category} - {most_common_address}"
+            first_row["LOCATION_NAME"] = f"{most_common_sub_category} - {most_common_address}"
             first_row["TOP_CATEGORY"]=most_common_top_category
             first_row["SUB_CATEGORY"]=most_common_sub_category
             first_row["CATEGORY_TAGS"]=most_common_tag_category
