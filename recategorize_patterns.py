@@ -348,135 +348,104 @@ def remove_nearby_duplicate_offices(mp_gdf, placekeys_to_drop_path, distance_thr
     print(f"\nAdded {len(new_placekeys_to_drop)} PLACEKEYs to `{placekeys_to_drop_path}`.")
     return mp_gdf_cleaned
 
-def calculate_polygon_diameter(mp):
-    diameters = []
-
-    for geom in mp['POLYGON_WKT']:
-        try:
-            # Only apply loads() if it's still a string
-            if isinstance(geom, str):
-                polygon = loads(geom)  # Convert WKT string to Polygon
-            else:# isinstance(geom, Polygon):
-                polygon = geom  # Already a Polygon, no need to convert
-            #else:
-                #raise ValueError("Invalid data type for POLYGON_WKT")
-
-            # Get bounding box (min_x, min_y, max_x, max_y)
-            min_x, min_y, max_x, max_y = polygon.bounds
-
-            # Compute geodesic distance between diagonal corners
-            diameter = geodesic((min_y, min_x), (max_y, max_x)).meters
-            diameters.append(diameter)
-
-        except Exception as e:
-            #print(f"Error processing geometry: {geom}, Error: {e}")
-            diameters.append(None)
-
-    mp['POLYGON_DIAMETER'] = diameters
-    return mp
-
-def remove_nearby_duplicate_offices_no_address(mp_gdf, placekeys_to_drop_path, fuzz_threshold=75):
-
-    try:
-        placekeys_to_drop = pd.read_csv(placekeys_to_drop_path)
-    except FileNotFoundError:
-        placekeys_to_drop = pd.DataFrame(columns=['PLACEKEY'])
-    mp_gdf = calculate_polygon_diameter(mp_gdf)
-    excluded_brands = {'Walmart', 'Winn Dixie', 'Walgreens', 'CVS','Publix',"Walmart Photo Center","Walmart Vision Center","Walmart Auto Care Center","Walmart Pharmacy","Woodforest National Bank","Jackson Hewitt Tax Service"}
-    excluded_categories = {'Child Day Care Services', 'Elementary and Secondary Schools','Child and Youth Services'}
-    mp_filtered = mp_gdf[
-        (~mp_gdf['BRANDS'].isin(excluded_brands)) &
-        (~mp_gdf['LOCATION_NAME'].str.contains("Emergency", case=False, na=False)) &
-        #(~mp_gdf['LOCATION_NAME'].str.contains("Walmart|Winn Dixie|Walgreens|CVS|Publix", case=False, na=False)) &
-        (~mp_gdf['TOP_CATEGORY'].isin(excluded_categories)) &
-        (~mp_gdf['LOCATION_NAME'].isin(excluded_brands))  # **NEW EXCLUSION**
-    ].copy()
-    mp_filtered = gpd.GeoDataFrame(mp_filtered.copy(), geometry=gpd.points_from_xy(mp_filtered.LONGITUDE, mp_filtered.LATITUDE), crs="EPSG:4326").to_crs(epsg=32616)
-    #mp_filtered=mp_filtered[mp_filtered['POLYGON_CLASS']=='SHARED_POLYGON']
-    mp_filtered = mp_filtered.reset_index(drop=True)
-    coords = np.array(list(zip(mp_filtered.geometry.x, mp_filtered.geometry.y)))
-    tree = cKDTree(coords)
-
-    to_remove = set()
-    new_removed_rows = []
-    new_placekeys_to_drop = []
-
-    index_mapping = dict(zip(range(len(mp_filtered)), mp_filtered.index))
-
-    for idx, coord in zip(mp_filtered.index, coords):
-        if idx in to_remove:
-            continue
-        distance_threshold = mp_filtered.at[idx, 'POLYGON_DIAMETER']  # Use row-specific POLYGON_DIAMETER
-        if pd.isna(distance_threshold):
-            distance_threshold = 100  # Default fallback if missing
-
-        nearby_indices = [mp_filtered.index[i] for i in tree.query_ball_point(coord, distance_threshold)]
-        current_name = mp_filtered.at[idx, 'LOCATION_NAME']
-        current_category = mp_filtered.at[idx, 'TOP_CATEGORY']
-        duplicates = [idx]
-
-        for i in nearby_indices:
-            if i == idx or i in to_remove:
-                continue
-
-            nearby_name = mp_filtered.at[i, 'LOCATION_NAME']
-            nearby_category = mp_filtered.at[i, 'TOP_CATEGORY']
-
-            name_similarity = fuzz.ratio(current_name, nearby_name)
-            #address_similarity = fuzz.ratio(current_address, nearby_address)
-            if (
-                ("Religious Organization" in {current_category, nearby_category}) and
-                ("Child Day Care Services" in {current_category, nearby_category} or
-                 any(keyword in current_name.lower() or keyword in nearby_name.lower() for keyword in ["childcare", "daycare", "child"]))
-            ):
-                continue  # Skip removing this pair
-
-            if name_similarity >= fuzz_threshold:# and address_similarity >= fuzz_threshold:
-                duplicates.append(i)
-
-        if len(duplicates) > 1:
-            duplicate_rows = mp_filtered.loc[duplicates]
-
-            parent_rows = duplicate_rows[duplicate_rows['parent_flag'] == 1]
-
-            if not parent_rows.empty:
-                # Keep one of the parent_flag=1 rows with the highest visit count
-                keep_idx = parent_rows['RAW_VISIT_COUNTS'].idxmax()
-            else:
-                # No parent_flag=1, so keep the row with the highest visit count
-                keep_idx = duplicate_rows['RAW_VISIT_COUNTS'].idxmax()
-
-            remove_idxs = [i for i in duplicates if i != keep_idx]
-
-            # Handle case where neither removal condition is met (same visit counts & parent flags)
-            if all(mp_filtered.loc[i, 'parent_flag'] == mp_filtered.loc[keep_idx, 'parent_flag'] for i in remove_idxs) and \
-               all(mp_filtered.loc[i, 'RAW_VISIT_COUNTS'] == mp_filtered.loc[keep_idx, 'RAW_VISIT_COUNTS'] for i in remove_idxs):
-                remove_idxs = remove_idxs[:1]
-
-            # If both have parent_flag=1, update PARENT_PLACEKEY references
-            if len(parent_rows) > 1:
-                kept_placekey = mp_filtered.loc[keep_idx, 'PLACEKEY']
-                for remove_idx in remove_idxs:
-                    removed_placekey = mp_filtered.loc[remove_idx, 'PLACEKEY']
-                    mp_gdf.loc[mp_gdf['PARENT_PLACEKEY'] == removed_placekey, 'PARENT_PLACEKEY'] = kept_placekey
-                    print(f"**Updated PARENT_PLACEKEY:** Replaced {removed_placekey} → {kept_placekey}")
-
-            print(f"\n**Keeping:** {mp_filtered.loc[keep_idx, 'PLACEKEY']} | {mp_filtered.loc[keep_idx, 'LOCATION_NAME']} | {mp_filtered.loc[keep_idx, 'address']}")
-            print("**Removing:**")
-            for i in remove_idxs:
-                print(f"   - {mp_filtered.loc[i, 'PLACEKEY']} | {mp_filtered.loc[i, 'LOCATION_NAME']} | {mp_filtered.loc[i, 'address']} (Matched)")
-
-            new_removed_rows.extend(mp_filtered.loc[remove_idxs].to_dict('records'))
-            new_placekeys_to_drop.extend(mp_filtered.loc[remove_idxs, 'PLACEKEY'].tolist())
-            to_remove.update(remove_idxs)
-
-    new_removed_df = pd.DataFrame(new_removed_rows)
-    mp_gdf_cleaned = mp_gdf.drop(index=mp_gdf.index.intersection(to_remove)).reset_index(drop=True)
-    new_placekeys_df = pd.DataFrame({'PLACEKEY': new_placekeys_to_drop})
-    placekeys_to_drop = pd.concat([placekeys_to_drop, new_placekeys_df], ignore_index=True).drop_duplicates()
-    placekeys_to_drop.to_csv(placekeys_to_drop_path, index=False)
-    print(f"\nAdded {len(new_placekeys_to_drop)} PLACEKEYs to `{placekeys_to_drop_path}`.")
-    return mp_gdf_cleaned
+def update_mp(mp)
+  mp=mp[mp['PLACEKEY']!='227-222@8gk-tt2-6zf']
+  mp=update_placekey_info(mp,'zzw-222@8gk-tv9-ckf',new_parent="")
+  mp=update_placekey_info(mp,'222-226@8gk-tv9-t35',new_location_name='Spain & McDonald Clinic')
+  mp=update_placekey_info(mp,'227-227@8gk-tv4-f9f',new_parent="''",new_top_category='Executive, Legislative, and Other General Government Support',new_subcategory='Other General Government Support',new_category_tags='City Hall')
+  mp=update_placekey_info(mp,['222-225@8gk-td2-wff','zzy-222@8gk-tmq-wrk','222-222@8gm-9nt-jy9','223-222@8gm-9mb-f2k','223-222@8gk-tt9-cdv'],new_top_category='Administration of Human Resource Programs',new_subcategory='Administration of Human Resource Programs (except Education, Public Health, and Veterans Affairs Programs)',new_naics_code='923130',new_category_tags='Social Security Administration')
+  mp=update_placekey_info(mp,['zzw-222@8gk-ytw-qpv','224-224@8gk-yhp-7nq','zzz-222@8gm-9pq-djv','222-224@8gk-tv9-jqf','222-223@8gm-96d-p5f'],new_top_category='Spectator Sports',new_subcategory='Other Spectator Sports',new_category_tags='Sports Stadium')
+  mp=update_placekey_info(mp,['zzw-222@8gk-yh4-ysq','zzy-223@8gk-ygf-6hq','22b-222@8gk-tbt-x89','223-222@8gk-tdz-djv'],new_top_category='Promoters of Performing Arts, Sports, and Similar Events',new_subcategory='Promoters of Performing Arts, Sports, and Similar Events with Facilities',new_naics_code='711310')
+  mp=update_placekey_info(mp,'223-228@8gk-tv8-hnq',new_subcategory='Lessors of Nonresidential Buildings (except Miniwarehouses)',new_category_tags='Office Park')
+  mp=update_placekey_info(mp,['22b-222@8gk-tsy-f75', '222-222@8gk-twj-grk','226-224@8gk-tv9-k75'],new_top_category='Performing Arts Companies',new_subcategory='Theater Companies and Dinner Theaters',new_naics_code='711110')
+  mp=update_placekey_info(mp,['222-223@8gk-tt9-d35','22g-222@8gk-tv4-6c5'],new_top_category='Museums, Historical Sites, and Similar Institutions',new_subcategory='Museums',new_naics_code='712110')
+  mp=update_placekey_info(mp,['zzw-222@8gk-yhn-gff','228-222@8gk-y8q-zvf'],new_top_category='Other Amusement and Recreation Industries',new_subcategory='Fitness and Recreational Sports Centers',new_naics_code='713940',new_category_tags='Tennis Club')
+  mp=update_placekey_info(mp,['222-222@8gm-94s-grk','zzy-222@8gm-94p-ht9'],new_category_tags='Community Center')
+  mp=update_placekey_info(mp,['zzz-222@8gm-978-6ff','zzz-222@8gk-td3-st9','zzz-222@8gk-tdx-8y9','zzz-222@8gm-95f-zxq','zzz-222@8gk-tcz-rrk','zzz-222@8gk-tdv-rhq','222-223@8gk-sds-9pv'],new_category_tags='Parks')
+  mp=update_placekey_info(mp,['zzw-223@8gk-twk-q9f', '227-227@8gk-tv4-f9f','223-227@8gk-tv4-fj9', '224-223@8gk-tst-p7q','223-223@8gk-tt3-ct9'],new_top_category='Executive, Legislative, and Other General Government Support',new_subcategory='Other General Government Support',new_naics_code='921190')
+  mp=update_placekey_info(mp,'223-223@8gk-tv4-59f',new_top_category='Advertising, Public Relations, and Related Services',new_naics_code='541800')
+  mp=update_placekey_info(mp,'zzw-22h@8gk-tv4-5xq',new_top_category='Advertising, Public Relations, and Related Services',new_naics_code='541800')
+  mp=convert_placekey_to_stop(mp,'228-222@8gk-twc-kj9','stop_id 2106: Hwy 31 and Massey Rd (IB)')
+  mp=mp[mp['PLACEKEY'] != '223-227@8gk-tbq-zcq']
+  mp=update_placekey_info(mp,'226-224@8gk-tv4-649',new_top_category='Lessors of Real Estate', new_subcategory='Lessors of Other Real Estate Property', new_naics_code='531120', new_category_tags='Office Building')
+  mp=update_placekey_info(mp,['zzy-222@8gk-tk8-y5f','223-222@8gk-tsy-fj9','222-222@8gk-ttq-7kf','222-222@8gk-yjv-5xq','22t-222@8gk-twg-m8v','22c-228@8gk-tv7-y9z'],new_top_category='Other Schools and Instruction',new_subcategory='Fine Arts Schools',new_naics_code='611610')
+  mp=update_placekey_info(mp,'zzz-222@8gk-t8k-7bk',new_top_category='Museums, Historical Sites, and Similar Institutions',new_subcategory='Nature Parks and Other Similar Institutions',new_naics_code='712190')
+  mp=update_placekey_info(mp,['zzy-227@8gk-tv3-g49','zzy-222@8gk-tv4-ckf'],new_top_category='Other Personal Services',new_subcategory='Parking Lots and Garages',new_naics_code='812930')
+  mp=update_placekey_info(mp,'226-224@8gk-tv4-649',new_top_category='Lessors of Real Estate', new_subcategory='Lessors of Other Real Estate Property', new_naics_code='531120', new_category_tags='Office Building')
+  mp=update_placekey_info(mp,['zzy-222@8gk-tk8-y5f','223-222@8gk-tsy-fj9','222-222@8gk-ttq-7kf','222-222@8gk-yjv-5xq','22t-222@8gk-twg-m8v','22c-228@8gk-tv7-y9z'],new_top_category='Other Schools and Instruction',new_subcategory='Fine Arts Schools',new_naics_code='611610')
+  mp=update_placekey_info(mp,'222-222@8gk-tv2-4n5',new_top_category='Other Amusement and Recreation Industries',new_subcategory='All Other Amusement and Recreation Industries',new_naics_code='713990')
+  mp=update_placekey_info(mp,'222-222@8gk-yjd-mff',new_top_category='Other Schools and Instruction',new_subcategory='Sports and Recreation Instruction',new_category_tags='Gymnastics School, Cheerleading School')
+  mp.loc[mp['LOCATION_NAME'].str.contains('Community College', na=False, case=False), 'CATEGORY_TAGS'] = 'Community College'
+  mp.loc[mp['LOCATION_NAME'].str.contains('University', na=False, case=False), 'CATEGORY_TAGS'] = 'University'
+  mp=mp[mp['PLACEKEY']!='zzw-225@8gk-tmr-2ff']
+  mp=update_placekey_info(mp,['zzw-225@8gk-tmr-2ff'],new_subcategory='All Other Home Furnishings Stores')
+  mp.loc[(mp['LOCATION_NAME'].str.contains('Academy', na=False, case=False)) & (mp['TOP_CATEGORY'] != 'Elementary and Secondary Schools'), 'TOP_CATEGORY'] = 'Other Schools and Instruction'
+  mp=update_placekey_info(mp,['zzy-227@8gk-tv3-g49','zzy-222@8gk-tv4-ckf'],new_top_category='Other Personal Services',new_subcategory='Parking Lots and Garages',new_naics_code='812930')
+  matching_placekeys = mp[mp['LOCATION_NAME'].str.contains(r'\bchamber\s*of\s*commerce\b', flags=re.IGNORECASE, regex=True, na=False)]['PLACEKEY'].tolist()
+  if matching_placekeys:
+      mp = update_placekey_info(mp,matching_placekeys,new_top_category='Business, Professional, Labor, Political, and Similar Organizations',new_subcategory='Business Associations',new_naics_code='813910')
+      print(f" Updated {len(matching_placekeys)} rows matching 'Chamber of Commerce'.")
+  
+  else:
+      print(" No matching 'Chamber of Commerce' locations found.")
+  mp=update_placekey_info(mp,['zzw-223@8gk-twf-8d9','zzw-222@8gk-tvz-rhq'],new_category_tags='Seminary School')
+  mp=update_placekey_info(mp,['zzw-223@8gk-ttx-dd9', '222-223@8gm-95h-y35','22b-222@8gm-3rn-pqf', '223-222@8gk-t8n-6c5','zzw-223@8gk-tq4-7nq', '225-222@8gm-5sp-y5f','222-222@8gk-ttx-rff', 'zzw-223@8gk-tv2-mrk','222-223@8gk-twg-ct9', 'zzw-226@8gk-tv3-gx5','zzw-222@8gk-tt2-q2k', '227-222@8gk-ttn-p7q','222-222@8gk-tvj-t35', '222-224@8gk-tvj-t35','zzw-223@8gk-tkv-h5z', '223-224@8gm-3rw-y9z','222-223@8gk-tvc-ffz', 'zzw-222@8gk-yhh-nt9','zzw-222@8gk-tsx-9vf', '222-223@8gm-959-8d9','zzw-222@8gk-tdz-bkz', 'zzw-223@8gk-tqv-9j9','222-222@8gk-tbq-975', '22m-222@8gk-tbf-q9f','222-222@8gk-yhy-v4v', '222-222@8gk-t7g-4d9','zzw-222@8gk-tv2-t5f', 'zzw-222@8gk-tsy-zfz','222-224@8gk-y7t-q75', '222-222@8gk-ttp-fvf','223-222@8gk-tv3-g8v', '226-223@8gm-9pq-99f','223-223@8gm-9nj-vcq', '225-222@8gm-rp4-7bk',
+         'zzw-223@8gk-ygy-m8v', 'zzw-222@8gk-w9q-v75','223-223@8gk-tv7-tqf', 'zzw-222@8gm-rtc-xt9','22b-222@8gk-td5-ffz', 'zzw-222@8gk-tpy-qpv','224-222@8gk-tv2-hnq', '22c-223@8gk-tvx-hyv','227-222@8gk-wc9-z4v', '223-223@8gk-ttd-33q','223-224@8gk-tsr-bx5', '222-224@8gk-tth-vfz','222-222@8gk-t8n-8y9', 'zzw-223@8gk-twh-4y9','22f-222@8gm-rnx-y7q', 'zzw-222@8gk-t8k-nt9','227-223@8gk-tt9-cyv', '222-222@8gk-tps-49z','223-222@8gk-ttz-xt9', 'zzw-223@8gm-94w-snq','zzw-222@8gm-333-45f', '222-223@8gk-twf-t5f','zzw-224@8gk-twd-5xq', '225-222@8gk-tv6-q4v','226-223@8gk-ttr-vmk', 'zzw-223@8gk-y8m-rhq','zzw-223@8gk-tqn-vj9', '225-223@8gk-tqn-zmk','222-222@8gk-t74-rzf', '222-222@8gk-tds-6tv','223-222@8gk-tt9-dn5', '226-222@8gk-tdp-249','zzw-223@8gk-tsz-5s5', '222-223@8gk-tpy-z4v','222-223@8gk-tvb-45f', '222-224@8gk-t7f-jn5','225-222@8gk-ttv-pd9', '224-222@8gm-9n5-8jv','223-222@8gk-tdx-wff', '222-223@8gk-tv3-gkz','222-226@8gk-tv3-gkz', '222-227@8gk-tv3-gkz','zzw-222@8gm-96z-6ff', '223-222@8gk-ttb-2ff','zzy-222@8gk-tst-7h5', '222-222@8gk-twc-dn5','223-222@8gk-tsw-tvz', 'zzw-223@8gk-trm-yjv','zzw-222@8gk-tsw-wp9', 'zzw-222@8gm-rst-ghq','zzw-222@8gk-tsw-wzf', 'zzw-222@8gm-32n-mzf','zzy-222@8gm-rzs-yn5', 'zzw-222@8gk-tfx-ty9','zzw-222@8gm-5jq-2kz', '222-222@8gk-tct-mkz','222-222@8gk-tky-c89', '22d-222@8gk-tpy-m8v','222-226@8gk-tmt-tsq'],new_category_tags='Churches')
+  mp=update_placekey_info(mp,['223-222@8gk-tdw-3dv'],new_subcategory='Sound Recording Studios')
+  mp=update_placekey_info(mp,['225-222@8gm-rnx-z4v','222-223@8gk-y58-ty9','zzy-222@8gm-5ng-djv','223-222@8gk-tv7-kcq','225-222@8gm-34g-3bk'],new_top_category='Performing Arts Companies',new_subcategory='Dance Companies')
+  mp=update_placekey_info(mp,['222-222@8gk-tbk-33q', 'zzw-222@8gm-9pv-4gk','zzz-222@8gk-t92-8n5', 'zzw-222@8gm-5sp-mzf','zzw-224@8gk-tn8-nkf', '227-222@8gm-9nd-k75','zzw-223@8gk-w8r-j9z', '222-222@8gm-s3q-m6k','222-222@8gk-twd-qmk', 'zzw-222@8gk-t8q-6kz','zzy-222@8gm-994-skf', 'zzw-222@8gk-t9g-tgk','zzw-222@8gk-t8w-jy9', 'zzw-222@8gk-t87-vmk','zzw-222@8gk-tv3-g8v', '225-222@8gk-t8x-v4v','zzw-222@8gk-yhy-ht9', '222-222@8gm-s3s-jvz','222-222@8gm-9p2-fzz', '222-222@8gm-5jq-6rk','222-222@8gk-t92-j9z', 'zzy-222@8gm-sb5-wzf','225-222@8gk-trj-6tv', '227-222@8gk-tsw-zxq','zzw-222@8gm-96d-qfz', '222-223@8gk-tth-vfz','222-223@8gk-tn9-v75', '222-222@8gm-59j-sh5','zzw-225@8gk-tq4-7nq', 'zzw-222@8gk-ttm-9j9','zzw-222@8gk-tt3-4jv', 'zzw-222@8gk-tyb-vzz','222-222@8gk-wsp-jy9', '222-224@8gk-ttx-rff','zzw-222@8gk-tvc-6p9', '225-222@8gk-tvj-t35','zzw-222@8gk-tkv-h5z', 'zzy-223@8gk-tmf-zfz','222-223@8gm-rny-28v', 'zzw-222@8gk-tnb-8n5','zzw-222@8gm-9nd-cbk', '224-223@8gm-9pm-7qz','222-222@8gk-t93-qxq', 'zzw-222@8gm-959-hnq','zzw-223@8gk-tbj-qvf', '222-222@8gm-584-qmk','223-222@8gm-9kz-mhq', 'zzw-222@8gk-tbj-5xq','zzw-222@8gk-tn8-nkf', 'zzw-222@8gm-585-s89','zzw-222@8gk-tq2-c89', '224-222@8gm-s3b-v9f','222-222@8gm-994-dn5', '222-222@8gm-5qz-xwk','22b-222@8gm-972-dd9', 'zzw-222@8gk-tmt-ty9','zzw-222@8gk-tg3-5xq', '222-222@8gk-sc4-7yv','22d-222@8gk-ttg-q2k', '222-223@8gk-t8v-y9z','zzw-222@8gk-tv4-fcq', '223-222@8gk-yf6-dsq','zzw-222@8gk-tdp-t35', '223-222@8gm-9mb-snq','zzy-222@8gm-9n5-btv', '22c-222@8gk-tc3-ch5','zzw-222@8gm-9mr-fpv', '222-223@8gk-t92-wc5','zzw-222@8gk-tdz-9zz', '222-222@8gk-thr-cwk','223-222@8gk-yjk-8n5', 'zzw-222@8gm-5h6-wx5','223-222@8gk-tc9-5pv', '223-222@8gk-tv2-mrk','228-222@8gk-tk6-pjv', '226-222@8gk-tdw-3t9','222-222@8gm-4z8-tgk', 'zzy-222@8gk-xt3-q4v','224-222@8gk-tsr-q9f', 'zzw-222@8gm-5jn-yd9','222-222@8gk-twg-mc5', 'zzw-223@8gk-yhp-4sq','222-222@8gk-yhn-dgk', '223-222@8gk-trq-xbk','224-222@8gk-ttb-2hq', '222-222@8gk-tvh-33q','222-223@8gm-95h-skf', 'zzw-222@8gm-9ps-sdv','222-222@8gk-yjz-m6k', 'zzw-222@8gk-x5v-mx5','zzw-222@8gk-tds-pn5', '225-222@8gk-ydk-yjv','222-222@8gm-9ng-7t9', '222-223@8gk-tt3-pjv','zzw-222@8gk-tk2-j9z', 'zzw-223@8gk-tvy-xqz','222-222@8gk-yh7-26k', '225-222@8gm-9mb-g49','22n-222@8gk-tcg-st9', '222-222@8gk-thx-68v','zzy-224@8gk-tmg-j7q', '222-222@8gm-5km-hyv','225-223@8gk-yjq-kfz', '223-222@8gk-t8n-2c5','zzw-222@8gk-tnb-xbk', '223-222@8gk-yh8-3kf','22f-222@8gk-tbf-q2k', '222-222@8gk-tpt-yy9','zzw-222@8gm-9nm-hbk', 'zzy-223@8gm-9n9-pd9','zzw-222@8gk-ydq-hdv', 'zzw-222@8gm-s2f-zzz','223-222@8gk-tc9-6rk', '222-222@8gm-4z7-wff','224-222@8gk-tsy-h3q', '223-224@8gk-tv9-xt9','224-222@8gk-tc9-qmk', '222-222@8gk-yh7-fcq','224-222@8gk-yjz-pvz', '222-222@8gk-y58-t7q','zzw-222@8gm-9mb-dsq', '222-222@8gk-w9q-9fz','zzw-222@8gk-yhh-qs5', '225-223@8gk-tv3-k4v','222-222@8gk-ttn-h89', 'zzw-223@8gm-34f-dd9','zzw-223@8gk-twd-bff', '224-222@8gk-tv4-66k','222-223@8gk-tv3-dy9', 'zzy-222@8gk-tkn-djv','223-222@8gk-yf3-z4v', 'zzw-222@8gk-tqg-8n5','222-222@8gk-yhh-hnq', '227-222@8gk-tc4-wkz','222-223@8gk-tc2-vs5', '22d-222@8gk-tvb-gkz','zzy-222@8gk-tv4-gtv', '224-225@8gk-t8w-8sq','zzw-222@8gk-thn-bkz', '223-222@8gk-y6f-sh5','zzw-222@8gm-9mb-pjv', '222-222@8gk-tt7-5zz','zzw-222@8gk-trm-yjv', '22j-222@8gk-tw2-dsq','223-222@8gk-tdn-yjv', 'zzw-222@8gm-9pq-d9z','zzw-222@8gk-x5x-m8v', 'zzw-222@8gk-twc-ndv','222-222@8gk-yjk-dsq', 'zzw-223@8gm-8y4-4jv','zzy-222@8gk-tc2-vj9', '222-222@8gk-tv8-kj9','224-222@8gk-tby-9fz', '22g-222@8gm-5sq-26k','zzw-225@8gk-tbr-hqz', '226-222@8gm-9n5-649','223-222@8gk-yhp-whq'],new_top_category='Child Day Care Services',new_subcategory='Child Day Care Services',new_naics_code='624410')
+  mp=update_placekey_info(mp,'223-222@8gm-9mb-f2k',new_top_category='Building Material and Supplies Dealers',new_subcategory='Other Building Material Dealers',new_naics_code='440190',new_category_tags='Building Supply')
+  mp=update_placekey_info(mp,'225-222@8gk-tv4-kcq',new_top_category='All Other Ambulatory Health Care Services',new_subcategory='Blood and Organ Banks',new_naics_code='621991',new_category_tags='Organ Donation, Tissue Bank, Organ Transplant, Transplant Center')
+  mp=update_placekey_info(mp,['222-22p@8gk-tmm-vpv','zzw-223@8gm-9p2-v2k','222-223@8gk-tv9-gff'],new_top_category='Community Food and Housing, and Emergency and Other Relief Services',new_subcategory='Community Food Services',new_naics_code='624210')
+  mp=update_placekey_info(mp,['226-222@8gk-tv2-mtv','222-222@8gk-yjs-975','225-222@8gm-9nb-26k','222-226@8gk-tv4-cwk','222-222@8gk-t96-4d9','225-222@8gk-tv8-nqz','222-222@8gk-tnn-py9','223-222@8gk-tv3-fzz','223-222@8gk-t8n-2p9'],new_top_category='Civic and Social Organizations',new_subcategory='Civic and Social Organizations',new_naics_code='813410')
+  mp=update_placekey_info(mp,['226-222@8gk-tv6-qfz','22b-22g@8gk-ttx-bhq','25z-222@8gk-tvc-nkf','222-222@8gk-tw7-jqf','22b-222@8gk-twc-8gk','222-22h@8gk-tv3-dn5'],
+  new_top_category='Services for the Elderly and Persons with Disabilities',new_subcategory='Services for the Elderly and Persons with Disabilities',new_naics_code='624120')
+  mp=update_placekey_info(mp,['223-223@8gk-tvb-ghq','222-223@8gk-ygk-k4v','224-22h@8gk-tv4-4y9','229-222@8gk-tv9-hwk','22w-223@8gk-tst-r8v','222-222@8gk-tvy-8qf'],new_top_category='Individual and Family Services',new_subcategory='Other Individual and Family Services',new_naics_code='624190')
+  mp=update_placekey_info(mp,['225-222@8gk-tv2-qs5','222-222@8gm-9n9-zs5','zzw-223@8gk-tv3-c5z',],new_top_category='Child and Youth Services',new_subcategory='Child and Youth Services',new_naics_code='624110')
+  mp=update_placekey_info(mp,['237-222@8gk-ttx-gzf','222-222@8gk-tv5-99f','223-224@8gk-ttn-nyv','227-222@8gk-yhh-8y9','238-227@8gk-twk-tvz',],new_top_category='Grantmaking and Giving Services',new_subcategory='Voluntary Health Organizations',new_naics_code='813212')
+  mp=update_placekey_info(mp,['228-222@8gk-tv4-4y9','22d-222@8gk-y6f-5cq'],new_top_category='Community Food and Housing, and Emergency and Other Relief Services',new_subcategory='Community Housing Services',new_naics_code='624229')
+  mp=update_placekey_info(mp,['222-222@8gk-t7d-k75','225-222@8gk-tv6-45f'],new_top_category='Business, Professional, Labor, Political, and Similar Organizations',new_subcategory='Business Associations',new_naics_code='813910')
+  mp=update_placekey_info(mp,['223-223@8gk-tvg-4vz','224-222@8gk-tv7-4y9'],new_top_category='Religious Organizations',new_subcategory='Religious Organizations',new_naics_code='813110')
+  mp=update_placekey_info(mp,['222-223@8gk-stk-7bk','222-222@8gk-sdj-7yv','223-224@8gk-tds-7kf','zzy-223@8gk-y6f-jgk','zzw-222@8gk-tyb-vzz','223-222@8gk-y7b-pvz','222-222@8gk-tvh-hwk','223-222@8gk-yhh-9vf'],new_top_category='Child and Youth Services',new_subcategory='Child and Youth Services',new_naics_code='624110')
+  mp=update_placekey_info(mp,'222-222@8gk-tnb-dqf',new_location_name='Jefferson State Community College')
+  mp=update_placekey_info(mp,['222-222@8gk-tdx-6rk'],new_category_tags='Buddhist')
+  mp=update_placekey_info(mp,'222-222@8gk-twj-grk',new_top_category='Drinking Places (Alcoholic Beverages)',new_subcategory='Drinking Places (Alcoholic Beverages)',new_naics_code='722410')
+  mp=update_placekey_info(mp,'222-222@8gk-tk6-5j9',new_subcategory='All Other Amusement and Recreation Industries')
+  mp=update_placekey_info(mp,'222-223@8gk-trm-835',new_top_category='Furniture Stores',new_subcategory='Furniture Stores',new_naics_code='442110')
+  mp=update_placekey_info(mp,'222-222@8gm-976-hnq',new_top_category='Charter Bus Industry',new_subcategory='Charter Bus Industry',new_naics_code='485510')
+  
+  mp.loc[mp['CATEGORY_TAGS'].str.contains('Summer Camp', na=False, case=False) | mp['LOCATION_NAME'].str.contains('Summer Camp', na=False, case=False), ['TOP_CATEGORY', 'SUB_CATEGORY', 'NAICS_CODE']] = ['All Other Amusement and Recreation Industries','All Other Amusement and Recreation Industries',713990]
+  mp["SUB_CATEGORY"] = mp["SUB_CATEGORY"].fillna(mp["TOP_CATEGORY"])
+  duplicates = mp[mp.duplicated(subset=['VISITOR_HOME_CBGS'], keep=False)]
+  mp=move_column(mp,'RAW_VISIT_COUNTS',4)
+  mp=move_column(mp,'RAW_VISITOR_COUNTS',5)
+  mp=move_column(mp,'VISITS_BY_DAY',6)
+  mp=move_column(mp,'VISITOR_HOME_CBGS',7)
+  mp=move_column(mp,'MEDIAN_DWELL',8)
+  mp=move_column(mp,'POI_CBG',9)
+  mp=move_column(mp,'address',4)
+  mp=move_column(mp,'SAFEGRAPH_BRAND_IDS',10)
+  mp=move_column(mp,'CATEGORY_TAGS',15)
+  mp=update_category(mp,'zzy-222@8gk-tk6-wzf','Personal Services')
+  mp=update_category(mp,['zzy-222@8gk-tk8-y5f', '222-222@8gk-yjv-5xq',
+         '222-222@8gk-ttq-7kf', '223-222@8gk-tsy-fj9',
+         '223-222@8gk-tqp-zmk'],'Arts and Culture')
+  mp=update_category(mp,['zzw-222@8gk-yhp-jy9','226-223@8gm-3rx-tqf'],'Sports and Exercise')
+  mp=update_category(mp,['zzw-222@8gk-tv9-ckf','zzw-222@8gk-tv9-zmk'],'College')
+  mp=update_placekey_info(mp,'zzw-222@8gk-tv9-qcq',new_location_name='UAB School of Public Health',new_place_category='College')
+  mp=update_placekey_info(mp,'zzy-222@8gk-tv9-f2k',new_location_name='UAB School of Education and Human Sciences',new_place_category='College')
+  mp=update_placekey_info(mp,'224-224@8gk-tv9-g8v',new_location_name='UAB School of Engineering',new_place_category='College')
+  mp=update_placekey_info(mp,'223-222@8gk-tv9-wc5',new_location_name='UAB Hospital')
+  mp=update_placekey_info(mp,'22p-222@8gk-tvb-26k',new_location_name='Chauncey Sparks Center for Developmental and Learning Disorders')
+  mp=update_placekey_info(mp,'zzw-22f@8gk-ttz-w49',new_location_name='Birmingham Hearing And Balance Center')
+  arts_keywords=["Performing Arts","Mural"]
+  mp.loc[mp["LOCATION_NAME"].str.contains("|".join(arts_keywords), case=True, na=False),'place_category']=='Arts and Culture'
+  
+  mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_category']='City/Outdoors'
+  mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_subcategory']='Housing Authority'
+  mp=update_placekey_info(mp,'227-222@8gk-ttg-9fz',new_location_name="Marino's Market at Central Park",new_place_category='Retail for Basic Necessities',new_place_subcategory='Grocery Store')
+  mp=update_category(mp,['23g-222@8gk-twj-jn5','22b-222@8gk-tv6-q9f','zzw-222@8gk-tv4-cbk','zzy-223@8gk-ttg-k75','zzw-222@8gk-yh4-ysq','222-222@8gk-tv4-btv','222-222@8gk-thn-kzz','222-222@8gk-tt6-s3q','224-225@8gk-tv6-tn5','228-223@8gk-tv2-t35','22b-222@8gk-tbt-x89','272-222@8gk-t84-8d9'],'Entertainment')
+  return mp
 def parent_childs(df_filtered):
     parent_placekeys_set = set(df_filtered["PARENT_PLACEKEY"].dropna().unique())
     parent_placekey_dfs = df_filtered.loc[df_filtered["PLACEKEY"].isin(parent_placekeys_set)].copy()
@@ -635,17 +604,6 @@ def extract_visit_counts_by_day(mp):
         mp[f'visit_count_{day.lower()}'] = mp['POPULARITY_BY_DAY'].apply(lambda x: x.get(day, 0))
     return mp
 
-def drop_duplicates_with_priority(mp, save_path='/content/drive/MyDrive/data/removed_children.csv'):
-    mp['VISITOR_HOME_CBGS_STR'] = mp['VISITOR_HOME_CBGS'].astype(str)
-    mp_sorted = mp[mp['PARENT_PLACEKEY'].notna()].copy()
-    mp_sorted = mp_sorted.sort_values(by=['PARENT_PLACEKEY', 'VISITOR_HOME_CBGS_STR', 'RAW_VISIT_COUNTS'], ascending=[True, True, False])
-    cleaned_mp = mp_sorted.drop_duplicates(subset=['PARENT_PLACEKEY', 'VISITOR_HOME_CBGS'], keep='first')
-    dropped_rows = mp_sorted[~mp_sorted.index.isin(cleaned_mp.index)]
-    dropped_rows.to_csv(save_path, index=False)
-    cleaned_mp = cleaned_mp.drop(columns=['VISITOR_HOME_CBGS_STR'])
-    cleaned_mp.sort_values(by='RAW_VISIT_COUNTS', ascending=False, inplace=True)
-    cleaned_mp.reset_index(drop=True, inplace=True)
-    return cleaned_mp, dropped_rows
 
 def three_cat_label(mp):
   mp['three_cat_label'] = mp.apply(lambda row: (
@@ -818,4 +776,10 @@ def assign_specific_subcategories(mp):
     mp.loc[mp["place_category"].isin(["Work", "Other"]), "place_subcategory"] = "Work"
 
     return mp
+
+def move_column(df, column_name, new_position):
+    col = df.pop(column_name)
+    # Insert it at the new position
+    df.insert(new_position, column_name, col)
+    return df
 
