@@ -16,7 +16,7 @@ def load_data():
 
     mp=mp[mp['PLACEKEY']!='222-222@8gk-tdk-q2k']
     cbg_gdf=gpd.read_file('/content/drive/MyDrive/data/brh_cbg.geojson')
-    cbg_gdf['cbg'] = cbg_gdf['cbg'].astype(str).str.zfill(12).astype(int)
+    #cbg_gdf['cbg'] = cbg_gdf['cbg'].astype(str).str.zfill(12).astype(int)
     mp=process_cbg_data_v2(mp, cbg_gdf, 'RAW_VISITOR_COUNTS', 'VISITOR_HOME_CBGS')
     mp=get_time_buckets(mp)
     mp=add_raw_visit_counts(mp)
