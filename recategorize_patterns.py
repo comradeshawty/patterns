@@ -463,7 +463,7 @@ def view_brands(mp, brands):
     return mp[mp['BRANDS'].isin(brands)]
 def view_catlabel(mp,catlabel):
   return mp[mp['three_cat_label'].isin(catlabel)]
-def update_placekey_info(mp, placekeys,new_parent=None, new_location_name=None,new_top_category=None, new_subcategory=None, new_naics_code=None, new_category_tags=None):
+def update_placekey_info(mp, placekeys,new_parent=None, new_location_name=None,new_top_category=None, new_subcategory=None, new_naics_code=None, new_category_tags=None,new_place_category=None,new_place_subcategory=None):
     if isinstance(placekeys, str):
         placekeys = [placekeys]
 
@@ -481,6 +481,10 @@ def update_placekey_info(mp, placekeys,new_parent=None, new_location_name=None,n
         mp.loc[mask, 'SUB_CATEGORY'] = new_subcategory
     if new_naics_code:
         mp.loc[mask, 'NAICS_CODE'] = new_naics_code
+    if new_place_category:
+        mp.loc[mask, 'place_category'] = new_place_category
+    if new_place_subcategory:
+        mp.loc[mask, 'place_subcategory'] = new_place_subcategory
     if new_category_tags:
         mp.loc[mask, 'CATEGORY_TAGS'] = mp.loc[mask, 'CATEGORY_TAGS'].fillna('') + \
                                          (', ' if mp.loc[mask, 'CATEGORY_TAGS'].notna().all() else '') + \
