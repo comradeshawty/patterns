@@ -64,3 +64,46 @@ def drop_outliers_by_row(df, column_to_filter, k=1.5, verbose=True):
     df_out = label_outliers_iqr(df_out, column_to_filter=column_to_filter, k=k, verbose=verbose)
     df_out = df_out[~df_out['outlier']]
     return(df_out)
+
+def get_time_buckets(mp):
+    mp['POPULARITY_BY_HOUR'] = mp['POPULARITY_BY_HOUR'].apply(ast.literal_eval)
+    mp['early_morning_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[0:6]))  # 0 AM - 5 AM
+    mp['breakfast_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[6:10]))    # 6 AM - 9 AM
+    mp['morning_work_hours_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[10:12]))  # 10 AM - 11 AM
+    mp['lunch_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[12:14]))      # 12 PM - 1 PM
+    mp['afternoon_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[14:17]))  # 2 PM - 4 PM
+    mp['dinner_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[17:20]))     # 5 PM - 7 PM
+    mp['nighttime_visits'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(x[20:24]))  # 8 PM - 11 PM
+    def calculate_work_hours_visitors(row):
+      work_hours = list(range(9, 17))  # 7:30 AM (index 7) to 5:30 PM (index 17)
+      work_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+      if isinstance(row['POPULARITY_BY_DAY'], str):
+          try:
+              popularity_by_day = ast.literal_eval(row['POPULARITY_BY_DAY'])
+          except Exception:
+              return None
+      else:
+          popularity_by_day = row['POPULARITY_BY_DAY']
+      if isinstance(row['POPULARITY_BY_HOUR'], str):
+          try:
+              popularity_by_hour = ast.literal_eval(row['POPULARITY_BY_HOUR'])
+          except Exception:
+              return None
+      else:
+          popularity_by_hour = row['POPULARITY_BY_HOUR']
+      if not isinstance(popularity_by_day, dict) or not isinstance(popularity_by_hour, list):
+          return None
+      work_day_visits = sum([popularity_by_day.get(day, 0) for day in work_days])
+      if len(popularity_by_hour) == 24:
+          work_hours_visits = sum([popularity_by_hour[hour] for hour in work_hours])
+      else:
+          return None
+      total_weekly_visits = sum(popularity_by_day.values()) if popularity_by_day else 0
+      if total_weekly_visits == 0 or sum(popularity_by_hour) == 0:
+          return 0
+      workday_proportion = work_day_visits / total_weekly_visits
+      work_hours_proportion = work_hours_visits / sum(popularity_by_hour)
+      work_hours_visitors = work_day_visits * work_hours_proportion
+      return work_hours_visitors
+    mp['work_hours_visits'] = mp.apply(calculate_work_hours_visitors, axis=1)
+    return mp
