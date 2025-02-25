@@ -348,7 +348,7 @@ def remove_nearby_duplicate_offices(mp_gdf, placekeys_to_drop_path, distance_thr
     print(f"\nAdded {len(new_placekeys_to_drop)} PLACEKEYs to `{placekeys_to_drop_path}`.")
     return mp_gdf_cleaned
 
-def update_mp(mp)
+def update_mp(mp):
   mp=mp[mp['PLACEKEY']!='227-222@8gk-tt2-6zf']
   mp=update_placekey_info(mp,'zzw-222@8gk-tv9-ckf',new_parent="")
   mp=update_placekey_info(mp,'222-226@8gk-tv9-t35',new_location_name='Spain & McDonald Clinic')
