@@ -12,6 +12,8 @@ from cbgs_processor import process_cbg_data_v2,compute_weighted_and_simple_media
 from recategorize_patterns import SUB_CATEGORY_MAPPING,sub_categories_to_pretty_names,merge_duplicate_pois,update_mp,update_category,assign_place_category_and_subcategory,assign_specific_subcategories
 def load_data():
     mp=pd.read_csv('/content/drive/MyDrive/data/mp.csv')
+    brh_np=pd.read_csv('/content/drive/MyDrive/data/brh_np.csv')
+
     mp=mp[mp['PLACEKEY']!='222-222@8gk-tdk-q2k']
     cbg_gdf=gpd.read_file('/content/drive/MyDrive/data/brh_cbg.geojson')
     cbg_gdf['cbg'] = cbg_gdf['cbg'].astype(str).str.zfill(12).astype(int)
@@ -24,7 +26,7 @@ def load_data():
     mp=assign_specific_subcategories(mp)
     mp=update_mp(mp)
     mp = compute_weighted_and_simple_median_distance(mp, cbg_gdf)
-    return mp, cbg_gdf
+    return mp, cbg_gdf,brh_np
 def add_raw_visit_counts(mp):
     mp.loc[:, 'popularity_by_hour_sum'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(literal_eval(x)) if isinstance(x, str) else sum(x))
     mp.loc[:, 'visits_by_day_sum'] = mp['VISITS_BY_DAY'].apply(lambda x: sum(literal_eval(x)) if isinstance(x, str) else sum(x))
