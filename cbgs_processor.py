@@ -184,3 +184,25 @@ def compute_racial_visitor_counts(df_m, weighted_means_col, raw_visitor_col):
         new_col_name = col.replace('pop_frac', 'visitors')
         df_m[new_col_name] = df_m.apply(lambda row: np.ceil(row[weighted_means_col].get(col, 0) * row[raw_visitor_col]).astype(int),axis=1)
     return df_m
+
+def build_cbg_race_dict(cbg_gdf):
+    """
+    Build a dictionary mapping CBG id to an array of racial fractions.
+    The racial fraction order is:
+      [white, black, american_indian, asian, hispanic, hawaiian, other_race, two_race]
+    
+    Parameters:
+        cbg_gdf (pd.DataFrame): DataFrame with CBG-level racial data.
+    
+    Returns:
+        dict: Mapping from cbg id (string) to numpy array of racial fractions.
+    """
+    race_cols = ['white_pop_frac', 'black_pop_frac', 'american_indian_pop_frac', 
+                 'asian_pop_frac', 'hispanic_pop_frac', 'hawaiian_pop_frac', 
+                 'other_race_pop_frac', 'two_race_pop_frac']
+    cbg_race_dict = {}
+    for row in cbg_gdf.itertuples(index=False):
+        cbg_id = str(row.cbg)
+        fractions = np.array([getattr(row, col) for col in race_cols], dtype=float)
+        cbg_race_dict[cbg_id] = fractions
+    return cbg_race_dict
