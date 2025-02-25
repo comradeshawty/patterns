@@ -9,7 +9,7 @@ import numpy as np
 import regex as re
 import matplotlib.pyplot as plt
 import seaborn as sns
-from rapidfuzz import fuzz
+#from rapidfuzz import fuzz
 from scipy.spatial import cKDTree
 import ast
 from ast import literal_eval
@@ -815,6 +815,7 @@ def assign_specific_subcategories(mp):
 
     # Apply the function to update place_subcategory only for relevant rows
     mp["place_subcategory"] = mp.apply(match_subcategory, axis=1)
+    mp.loc[mp["place_category"].isin(["Work", "Other"]), "place_subcategory"] = "Work"
 
     return mp
 
