@@ -636,52 +636,115 @@ def update_mp_from_w(mp, w, columns_to_update):
     return mp
 
 def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_duplicate_pois.csv"):
+    """
+    Merges duplicate POI rows based on POLYGON_ID and VISITOR_HOME_CBGS.
+    
+    For each group of duplicates:
+      a) If one or more rows have parent_flag = 1:
+            - If exactly one row has parent_flag=1, that row is kept and its fields updated.
+            - If multiple rows have parent_flag=1, the LOCATION_NAME is set to the concatenated string
+              of all those rows’ LOCATION_NAMES, while TOP_CATEGORY, SUB_CATEGORY, and CATEGORY_TAGS
+              are taken as the most common values from the entire group.
+      b) If no rows have parent_flag = 1:
+            - If at least 75% of the rows share the same TOP_CATEGORY, merge the group by creating a new row
+              where LOCATION_NAME is set to "<most_common_TOP_CATEGORY> - <most_common_STREET_ADDRESS>", and
+              TOP_CATEGORY, SUB_CATEGORY, and CATEGORY_TAGS are set as the most common from the group.
+            - If less than 75% of the rows share the same TOP_CATEGORY, drop all the rows in the group and save them.
+              
+    Parameters:
+       mp       : DataFrame containing POI rows.
+       save_path: File path where removed duplicate rows will be stored.
+       
+    Returns:
+       cleaned_mp, removed_df
+         cleaned_mp: DataFrame with duplicates merged.
+         removed_df: DataFrame containing dropped rows.
+    """
+    # Create temporary columns to group duplicates
     mp["POLYGON_ID"] = mp["PLACEKEY"].str.split("@").str[1]
     mp["VISITOR_HOME_CBGS_STR"] = mp["VISITOR_HOME_CBGS"].astype(str)
-    mp=mp.sort_values(by='RAW_VISIT_COUNTS',ascending=False)
+    
+    # Sort so that rows with higher RAW_VISIT_COUNTS appear first
+    mp = mp.sort_values(by='RAW_VISIT_COUNTS', ascending=False)
     grouped = mp.groupby(["POLYGON_ID", "VISITOR_HOME_CBGS_STR"])
-
+    
     merged_rows = []
     removed_rows = []
-
+    processed_indices = set()
+    
     for (polygon_id, home_cbgs), group in grouped:
-        if len(group) >= 2:  # Only process groups with duplicates
+        if len(group) < 2:
+            continue  # Only process groups with duplicates
 
-            # Step 2: Prioritize row where parent_flag = 1
-            parent_rows = group[group["parent_flag"] == 1]
-
+        # Process the group
+        parent_rows = group[group["parent_flag"] == 1]
+        
+        if not parent_rows.empty:
+            # Case a) one or more parent_flag rows exist.
             if len(parent_rows) == 1:
-                first_row = parent_rows.iloc[0].copy()  # Keep the parent row
+                merged = parent_rows.iloc[0].copy()
+                # Set LOCATION_NAME as most common SUB_CATEGORY - most common STREET_ADDRESS (as before)
+                most_common_sub_category = Counter(group["SUB_CATEGORY"]).most_common(1)[0][0]
+                most_common_address = Counter(group["STREET_ADDRESS"]).most_common(1)[0][0]
+                merged["LOCATION_NAME"] = f"{most_common_sub_category} - {most_common_address}"
             else:
-                first_row = group.iloc[0].copy()  # If multiple or none are parents, keep the first row
-            # Determine new LOCATION_NAME (Most common TOP_CATEGORY - Most common STREET ADDRESS)
+                # Multiple parent rows: concatenate all LOCATION_NAMES from parent rows.
+                merged = parent_rows.iloc[0].copy()
+                concatenated_location_names = " | ".join(parent_rows["LOCATION_NAME"].tolist())
+                merged["LOCATION_NAME"] = concatenated_location_names
+
+            # In both cases, update the category fields using entire group aggregates.
             most_common_top_category = Counter(group["TOP_CATEGORY"]).most_common(1)[0][0]
             most_common_sub_category = Counter(group["SUB_CATEGORY"]).most_common(1)[0][0]
             most_common_tag_category = Counter(group["CATEGORY_TAGS"]).most_common(1)[0][0]
 
-            most_common_address = Counter(group["STREET_ADDRESS"]).most_common(1)[0][0]
-            first_row["LOCATION_NAME"] = f"{most_common_sub_category} - {most_common_address}"
-            first_row["TOP_CATEGORY"]=most_common_top_category
-            first_row["SUB_CATEGORY"]=most_common_sub_category
-            first_row["CATEGORY_TAGS"]=most_common_tag_category
-            # Keep only the first row, discard the rest
-            merged_rows.append(first_row)
-            removed_rows.append(group.iloc[1:])  # Store dropped rows
+            merged["TOP_CATEGORY"] = most_common_top_category
+            merged["SUB_CATEGORY"] = most_common_sub_category
+            merged["CATEGORY_TAGS"] = most_common_tag_category
 
-    # Create a DataFrame for removed rows and save them
+            merged_rows.append(merged)
+            # Mark all rows from the group as processed; if merged row came from the group, remove it from original ones
+            processed_indices.update(group.index.tolist())
+            # Save the non-kept rows in group (i.e. group minus the merged row) as removed.
+            removed_rows.append(group.drop(merged.name, errors='ignore'))
+        else:
+            # Case b) No parent_flag==1 in group. Check majority TOP_CATEGORY.
+            top_category_counts = Counter(group["TOP_CATEGORY"])
+            most_common_top_category, count = top_category_counts.most_common(1)[0]
+            if count / len(group) >= 0.75:
+                merged = group.iloc[0].copy()
+                most_common_address = Counter(group["STREET_ADDRESS"]).most_common(1)[0][0]
+                most_common_sub_category = Counter(group["SUB_CATEGORY"]).most_common(1)[0][0]
+                most_common_tag_category = Counter(group["CATEGORY_TAGS"]).most_common(1)[0][0]
+                merged["LOCATION_NAME"] = f"{most_common_top_category} - {most_common_address}"
+                merged["TOP_CATEGORY"] = most_common_top_category
+                merged["SUB_CATEGORY"] = most_common_sub_category
+                merged["CATEGORY_TAGS"] = most_common_tag_category
+                merged_rows.append(merged)
+                processed_indices.update(group.index.tolist())
+                removed_rows.append(group.drop(merged.name, errors='ignore'))
+            else:
+                # If less than 75% agree on TOP_CATEGORY, drop all rows of the group.
+                processed_indices.update(group.index.tolist())
+                removed_rows.append(group)
+    
+    # Create a DataFrame for removed rows
     if removed_rows:
-        removed_df = pd.concat(removed_rows)
+        removed_df = pd.concat(removed_rows).drop_duplicates()
         removed_df.to_csv(save_path, index=False)
     else:
         removed_df = pd.DataFrame()
 
-    # Create final cleaned dataframe
-    cleaned_mp = mp[~mp.index.isin(removed_df.index)]
-    cleaned_mp = pd.concat([cleaned_mp, pd.DataFrame(merged_rows)], ignore_index=True)
-
+    # Remove all processed duplicate rows from the original DataFrame.
+    cleaned_mp = mp[~mp.index.isin(processed_indices)].copy()
+    # Append merged rows
+    if merged_rows:
+        merged_df = pd.DataFrame(merged_rows)
+        cleaned_mp = pd.concat([cleaned_mp, merged_df], ignore_index=True)
+    
     # Drop temporary columns
-    cleaned_mp.drop(columns=["POLYGON_ID", "VISITOR_HOME_CBGS_STR"], inplace=True)
-
+    cleaned_mp.drop(columns=["POLYGON_ID", "VISITOR_HOME_CBGS_STR"], inplace=True, errors='ignore')
+    
     return cleaned_mp, removed_df
 
 def update_category(mp, placekeys, new_category):
