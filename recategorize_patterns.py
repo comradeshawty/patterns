@@ -258,7 +258,7 @@ sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Res
                                                 'Chamber of Commerce':['Business Associations'],
                                                 'Nonprofit':['Voluntary Health Organizations'],
                                                  'RV Camp':['RV (Recreational Vehicle) Parks and Recreational Camps'],
-                                                'Government Offices:['Executive, Legislative, and Other General Government Support','Other General Government Support']}}
+                                                'Government Offices':['Executive, Legislative, and Other General Government Support','Other General Government Support']}}
 def remove_nearby_duplicate_offices(mp_gdf, placekeys_to_drop_path, distance_threshold=20, fuzz_threshold=65):
 
     try:
