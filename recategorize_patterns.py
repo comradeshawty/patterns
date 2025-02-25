@@ -463,7 +463,7 @@ def view_brands(mp, brands):
     return mp[mp['BRANDS'].isin(brands)]
 def view_catlabel(mp,catlabel):
   return mp[mp['three_cat_label'].isin(catlabel)]
-def update_placekey_info(mp, placekeys, new_location_name=None,new_top_category=None, new_subcategory=None, new_naics_code=None, new_category_tags=None):
+def update_placekey_info(mp, placekeys,new_parent=None, new_location_name=None,new_top_category=None, new_subcategory=None, new_naics_code=None, new_category_tags=None):
     if isinstance(placekeys, str):
         placekeys = [placekeys]
 
@@ -473,6 +473,8 @@ def update_placekey_info(mp, placekeys, new_location_name=None,new_top_category=
         return mp
     if new_location_name:
         mp.loc[mask, 'LOCATION_NAME'] = new_location_name
+    if new_parent:
+        mp.loc[mask, 'PARENT_PLACEKEY'] = new_location_name
     if new_top_category:
         mp.loc[mask, 'TOP_CATEGORY'] = new_top_category
     if new_subcategory:
