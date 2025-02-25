@@ -474,7 +474,7 @@ def update_placekey_info(mp, placekeys,new_parent=None, new_location_name=None,n
     if new_location_name:
         mp.loc[mask, 'LOCATION_NAME'] = new_location_name
     if new_parent:
-        mp.loc[mask, 'PARENT_PLACEKEY'] = new_location_name
+        mp.loc[mask, 'PARENT_PLACEKEY'] = new_parent
     if new_top_category:
         mp.loc[mask, 'TOP_CATEGORY'] = new_top_category
     if new_subcategory:
