@@ -246,17 +246,19 @@ sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Res
                                           'Summer Camp':['Summer Camp'],
                                           'Driving School':['Automobile Driving Schools'],
                                           'Art Classes':['Art Classes','Painting with a Twist']},
-                                'City/Outdoors':{'Prison':['Correctional Institutions','Other General Government Support'],
+                                'City/Outdoors':{'Prison':['Correctional Institutions'],
                                                 'Cemetery':['Cemeteries and Crematories'],
                                                 'Police Station':['Police Protection'],
-                                                'DMV':['Regulation and Administration of Transportation Programs',],
+                                                'DMV':['Regulation and Administration of Transportation Programs','Administration of Economic Programs'],
                                                 'Fire Station':['Fire Protection',],
                                                 'Rotary Club':['Other Social Advocacy Organizations'],
                                                 'Courthouse':['Courts'],
                                                 'Park':['Nature Parks and Other Similar Institutions'],
                                                 'Social Organization':['Civic and Social Organizations'],
                                                 'Chamber of Commerce':['Business Associations'],
-                                                'Nonprofit':['Voluntary Health Organizations']}}
+                                                'Nonprofit':['Voluntary Health Organizations'],
+                                                 'RV Camp':['RV (Recreational Vehicle) Parks and Recreational Camps'],
+                                                'Government Offices:['Executive, Legislative, and Other General Government Support','Other General Government Support']}}
 def remove_nearby_duplicate_offices(mp_gdf, placekeys_to_drop_path, distance_threshold=20, fuzz_threshold=65):
 
     try:
@@ -792,6 +794,7 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
     mp.loc[mp["LOCATION_NAME"].str.contains("|".join(arts_keywords), case=True, na=False),'place_category']=='Arts and Culture'
     mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_category']='City/Outdoors'
     mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_subcategory']='Housing Authority'
+    mp.loc[mp['PLACEKEY']=='zzw-223@8gk-tv9-qpv','place_category']='College'
     return mp
 
 def assign_specific_subcategories(mp): 
