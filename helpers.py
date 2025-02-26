@@ -23,9 +23,9 @@ def load_data():
     mp=add_raw_visit_counts(mp)
     mp = propagate_month_adjustments_to_daily_counts(mp)
     mp,removed_df=merge_duplicate_pois(mp)
+    mp=update_mp(mp)
     mp=assign_place_category_and_subcategory(mp, SUB_CATEGORY_MAPPING, sub_categories_to_pretty_names)
     mp=assign_specific_subcategories(mp)
-    mp=update_mp(mp)
     mp = compute_weighted_and_simple_median_distance(mp, cbg_gdf)
     mp.loc[mp['place_category'] == 'Other', 'place_category'] = 'Work'
     mp.loc[mp['place_category'] == 'Work', 'place_subcategory'] = 'Work'
