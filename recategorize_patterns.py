@@ -539,6 +539,8 @@ def preprocess_mp(mp):
   mp['POSTAL_CODE']=mp['POSTAL_CODE'].astype('Int64').astype('str')
   mp['NAICS_CODE']=mp['NAICS_CODE'].astype('Int64').astype('str')
   mp['POI_CBG']=mp['POI_CBG'].astype('Int64').astype('str')
+  mp=mp[mp['PLACEKEY']!='222-222@8gk-tdk-q2k']
+
   mp.drop_duplicates(subset=['LOCATION_NAME','STREET_ADDRESS'], inplace=True, ignore_index=True)
   mp.loc[(mp['SUB_CATEGORY'] == 'Malls') & (mp['RAW_VISIT_COUNTS'] < 20000),'SUB_CATEGORY'] = 'Shopping Centers'
   categories_to_drop=['Household Appliance Manufacturing','Warehousing and Storage','Other Miscellaneous Manufacturing','General Warehousing and Storage','Machinery, Equipment, and Supplies Merchant Wholesalers',
