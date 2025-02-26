@@ -70,7 +70,7 @@ SUB_CATEGORY_MAPPING={'Restaurants':['Full-Service Restaurants','Casino Hotels',
                       }
 
 sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Restaurants'],
-                                               'Restaurants':['Full Service Restaurants','Casino Hotels']
+                                               'Restaurants':['Full Service Restaurants','Casino Hotels','Full-Service Restaurants']
                                                },
                               'Sports and Exercise':{'Sports Complex':['Promoters of Performing Arts, Sports, and Similar Events with Facilities'],
                                                        'Golf Courses and Country Clubs':['Golf Courses and Country Clubs'],
