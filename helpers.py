@@ -9,13 +9,15 @@ from shapely.geometry import Point
 import numpy as np
 import json
 from cbgs_processor import process_cbg_data_v2,compute_weighted_and_simple_median_distance
-from recategorize_patterns import SUB_CATEGORY_MAPPING,sub_categories_to_pretty_names,merge_duplicate_pois,update_mp,update_category,assign_place_category_and_subcategory,assign_specific_subcategories
+from recategorize_patterns import SUB_CATEGORY_MAPPING,sub_categories_to_pretty_names,preprocess_mp,update_mp_from_w,merge_duplicate_pois,update_mp,update_category,assign_place_category_and_subcategory,assign_specific_subcategories
 def load_data():
     mp=pd.read_csv('/content/drive/MyDrive/data/mp.csv')
     brh_np=pd.read_csv('/content/drive/MyDrive/data/brh_np.csv')
 
     cbg_gdf=gpd.read_file('/content/drive/MyDrive/data/brh_cbg.geojson')
     #cbg_gdf['cbg'] = cbg_gdf['cbg'].astype(str).str.zfill(12).astype(int)
+    mp=preprocess_mp(mp)
+    mp=update_mp_from_w(mp)
     mp=process_cbg_data_v2(mp, cbg_gdf, 'RAW_VISITOR_COUNTS', 'VISITOR_HOME_CBGS')
     mp=get_time_buckets(mp)
     mp=add_raw_visit_counts(mp)
