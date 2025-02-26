@@ -361,6 +361,7 @@ def update_mp(mp):
   mp=update_placekey_info(mp,['222-223@8gk-tt9-d35','22g-222@8gk-tv4-6c5'],new_top_category='Museums, Historical Sites, and Similar Institutions',new_subcategory='Museums',new_naics_code='712110')
   mp=update_placekey_info(mp,['zzw-222@8gk-yhn-gff','228-222@8gk-y8q-zvf'],new_top_category='Other Amusement and Recreation Industries',new_subcategory='Fitness and Recreational Sports Centers',new_naics_code='713940',new_category_tags='Tennis Club')
   mp=update_placekey_info(mp,['222-222@8gm-94s-grk','zzy-222@8gm-94p-ht9'],new_category_tags='Community Center')
+  mp=update_placekey_info(mp,new_location_name='Birmingham Civil Rights Institute',CATEGORY_TAGS='Museum')
   mp=update_placekey_info(mp,['zzz-222@8gm-978-6ff','zzz-222@8gk-td3-st9','zzz-222@8gk-tdx-8y9','zzz-222@8gm-95f-zxq','zzz-222@8gk-tcz-rrk','zzz-222@8gk-tdv-rhq','222-223@8gk-sds-9pv'],new_category_tags='Parks')
   mp=update_placekey_info(mp,['zzw-223@8gk-twk-q9f', '227-227@8gk-tv4-f9f','223-227@8gk-tv4-fj9', '224-223@8gk-tst-p7q','223-223@8gk-tt3-ct9'],new_top_category='Executive, Legislative, and Other General Government Support',new_subcategory='Other General Government Support',new_naics_code='921190')
   mp=update_placekey_info(mp,'223-223@8gk-tv4-59f',new_top_category='Advertising, Public Relations, and Related Services',new_naics_code='541800')
