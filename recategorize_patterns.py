@@ -859,8 +859,8 @@ def assign_specific_subcategories(mp):
 
     # Apply the function to update place_subcategory only for relevant rows
     mp["place_subcategory"] = mp.apply(match_subcategory, axis=1)
-    mp.loc[mp["place_category"]=="Other"], "place_category"] = "Work"
-    mp.loc[mp["place_category"].isin(["Work", "Other"]), "place_subcategory"] = "Work"
+    mp.loc[mp["place_category"]=="Other"], "place_category" = "Work"
+    mp.loc[mp["place_category"].isin(["Work", "Other"])], "place_subcategory" = "Work"
 
     return mp
 
