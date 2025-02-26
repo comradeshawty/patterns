@@ -490,7 +490,6 @@ def update_placekey_info(mp, placekeys,new_parent=None, new_location_name=None,n
         mp.loc[mask, 'CATEGORY_TAGS'] = mp.loc[mask, 'CATEGORY_TAGS'].fillna('') + \
                                          (', ' if mp.loc[mask, 'CATEGORY_TAGS'].notna().all() else '') + \
                                          new_category_tags
-    print(f"Updated {mask.sum()} rows for PLACEKEYs: {placekeys[:5]}{'...' if len(placekeys) > 5 else ''}")
     return mp
 
 def update_legal_services(mp):
