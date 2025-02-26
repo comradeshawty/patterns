@@ -555,9 +555,9 @@ def preprocess_mp(mp):
                             'Cable and Other Subscription Programming','Refrigeration Equipment and Supplies Merchant Wholesalers',
                             'Packing and Crating','Other Electronic Parts and Equipment Merchant Wholesalers','Plumbing and Heating Equipment and Supplies (Hydronics) Merchant Wholesalers',
                             'All Other Support Services']
-  mp = mp[~mp['TOP_CATEGORY'].isin(categories_to_drop)]
-  mp = mp[~mp['SUB_CATEGORY'].isin(sub_categories_to_remove)]
-  mp = mp.replace(r'\t', '', regex=True)
+  #mp = mp[~mp['TOP_CATEGORY'].isin(categories_to_drop)]
+  #mp = mp[~mp['SUB_CATEGORY'].isin(sub_categories_to_remove)]
+  #mp = mp.replace(r'\t', '', regex=True)
   mp = mp[~((mp['SUB_CATEGORY'] == 'Couriers and Express Delivery Services') & (mp['BRANDS'] != 'FedEx'))]
   mp=mp[mp['PLACEKEY']!='zzw-222@8gk-tv9-wrk']
   mp=mp[mp['IS_SYNTHETIC']==False]
