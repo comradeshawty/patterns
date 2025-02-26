@@ -650,8 +650,8 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
               are taken as the most common values from the entire group.
       b) If no rows have parent_flag = 1:
             - If at least 75% of the rows share the same TOP_CATEGORY, merge the group by creating a new row
-              where LOCATION_NAME is set to "<most_common_TOP_CATEGORY> - <most_common_STREET_ADDRESS>", and
-              TOP_CATEGORY, SUB_CATEGORY, and CATEGORY_TAGS are set as the most common from the group.
+              where LOCATION_NAME is set to "<most_common_TOP_CATEGORY> - <most_common_STREET_ADDRESS>", 
+              and TOP_CATEGORY, SUB_CATEGORY, and CATEGORY_TAGS are set as the most common from the group.
             - If less than 75% of the rows share the same TOP_CATEGORY, drop all the rows in the group and save them.
               
     Additionally, a new column "merged_flag" is created:
@@ -667,11 +667,11 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
          cleaned_mp: DataFrame with duplicates merged and merged_flag column added.
          removed_df: DataFrame containing dropped rows.
     """
-    # Create temporary columns to group duplicates
+    # Create temporary columns needed for grouping duplicates.
     mp["POLYGON_ID"] = mp["PLACEKEY"].str.split("@").str[1]
     mp["VISITOR_HOME_CBGS_STR"] = mp["VISITOR_HOME_CBGS"].astype(str)
     
-    # Sort so that rows with higher RAW_VISIT_COUNTS appear first
+    # Sort so that rows with higher RAW_VISIT_COUNTS appear first.
     mp = mp.sort_values(by='RAW_VISIT_COUNTS', ascending=False)
     grouped = mp.groupby(["POLYGON_ID", "VISITOR_HOME_CBGS_STR"])
     
@@ -683,14 +683,14 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
         if len(group) < 2:
             continue  # Only process groups with duplicates
 
-        # Process the group
+        # Process the group.
         parent_rows = group[group["parent_flag"] == 1]
         
         if not parent_rows.empty:
-            # Case a) one or more parent_flag rows exist.
+            # Case (a): one or more parent_flag rows exist.
             if len(parent_rows) == 1:
                 merged = parent_rows.iloc[0].copy()
-                # Set LOCATION_NAME as most common SUB_CATEGORY - most common STREET_ADDRESS (as before)
+                # Set LOCATION_NAME as most common SUB_CATEGORY - most common STREET_ADDRESS.
                 most_common_sub_category = Counter(group["SUB_CATEGORY"]).most_common(1)[0][0]
                 most_common_address = Counter(group["STREET_ADDRESS"]).most_common(1)[0][0]
                 merged["LOCATION_NAME"] = f"{most_common_sub_category} - {most_common_address}"
@@ -700,7 +700,7 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
                 concatenated_location_names = " | ".join(parent_rows["LOCATION_NAME"].tolist())
                 merged["LOCATION_NAME"] = concatenated_location_names
 
-            # In both cases, update the category fields using entire group aggregates.
+            # Update category fields using the entire group aggregates.
             most_common_top_category = Counter(group["TOP_CATEGORY"]).most_common(1)[0][0]
             most_common_sub_category = Counter(group["SUB_CATEGORY"]).most_common(1)[0][0]
             most_common_tag_category = Counter(group["CATEGORY_TAGS"]).most_common(1)[0][0]
@@ -708,16 +708,13 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
             merged["TOP_CATEGORY"] = most_common_top_category
             merged["SUB_CATEGORY"] = most_common_sub_category
             merged["CATEGORY_TAGS"] = most_common_tag_category
-            # Add merged_flag column indicating this row is a merge result.
             merged["merged_flag"] = True
 
             merged_rows.append(merged)
-            # Mark all rows from the group as processed
             processed_indices.update(group.index.tolist())
-            # Save the non-kept rows in group (i.e. group minus the merged row) as removed.
             removed_rows.append(group.drop(merged.name, errors='ignore'))
         else:
-            # Case b) No parent_flag==1 in group. Check majority TOP_CATEGORY.
+            # Case (b): No parent_flag==1. Check if at least 75% share the same TOP_CATEGORY.
             top_category_counts = Counter(group["TOP_CATEGORY"])
             most_common_top_category, count = top_category_counts.most_common(1)[0]
             if count / len(group) >= 0.75:
@@ -735,32 +732,35 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
                 processed_indices.update(group.index.tolist())
                 removed_rows.append(group.drop(merged.name, errors='ignore'))
             else:
-                # If less than 75% agree on TOP_CATEGORY, drop all rows of the group.
+                # Less than 75% agreement: drop all rows in the group.
                 processed_indices.update(group.index.tolist())
                 removed_rows.append(group)
     
-    # Create a DataFrame for removed rows
+    # Create a DataFrame for removed rows.
     if removed_rows:
-        removed_df = pd.concat(removed_rows).drop_duplicates()
+        removed_df = pd.concat(removed_rows)
+        # Convert list-type columns to tuples for hashability before dropping duplicates.
+        for col in removed_df.columns:
+            if removed_df[col].dtype == object:
+                removed_df[col] = removed_df[col].apply(lambda x: tuple(x) if isinstance(x, list) else x)
+        removed_df = removed_df.drop_duplicates()
         removed_df.to_csv(save_path, index=False)
     else:
         removed_df = pd.DataFrame()
 
-    # Remove all processed duplicate rows from the original DataFrame.
+    # Create the final cleaned DataFrame.
     cleaned_mp = mp[~mp.index.isin(processed_indices)].copy()
-    # Append merged rows
     if merged_rows:
         merged_df = pd.DataFrame(merged_rows)
         cleaned_mp = pd.concat([cleaned_mp, merged_df], ignore_index=True)
     
-    # For rows that were not merged, mark merged_flag as False.
+    # Ensure merged_flag is set to False for rows that were not merged.
     if "merged_flag" not in cleaned_mp.columns:
         cleaned_mp["merged_flag"] = False
     else:
-        # Set merged_flag=False for rows that don't have it (NaN) or were not merged.
         cleaned_mp["merged_flag"] = cleaned_mp["merged_flag"].fillna(False)
     
-    # Drop temporary columns
+    # Drop temporary columns.
     cleaned_mp.drop(columns=["POLYGON_ID", "VISITOR_HOME_CBGS_STR"], inplace=True, errors='ignore')
     
     return cleaned_mp, removed_df
