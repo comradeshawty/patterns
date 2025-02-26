@@ -739,10 +739,19 @@ def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_dupl
     # Create a DataFrame for removed rows.
     if removed_rows:
         removed_df = pd.concat(removed_rows)
-        # Convert list-type columns to tuples for hashability before dropping duplicates.
+        # For all object-type columns, convert list or dict to a hashable type.
+        def make_hashable(x):
+            if isinstance(x, list):
+                return tuple(x)
+            elif isinstance(x, dict):
+                # sort dictionary items to ensure consistent order
+                return tuple(sorted(x.items()))
+            else:
+                return x
+
         for col in removed_df.columns:
             if removed_df[col].dtype == object:
-                removed_df[col] = removed_df[col].apply(lambda x: tuple(x) if isinstance(x, list) else x)
+                removed_df[col] = removed_df[col].apply(make_hashable)
         removed_df = removed_df.drop_duplicates()
         removed_df.to_csv(save_path, index=False)
     else:
