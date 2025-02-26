@@ -27,6 +27,9 @@ def load_data():
     mp=assign_specific_subcategories(mp)
     mp=update_mp(mp)
     mp = compute_weighted_and_simple_median_distance(mp, cbg_gdf)
+    mp.loc[mp['place_category'] == 'Other', 'place_category'] = 'Work'
+    mp.loc[mp['place_category'] == 'Work', 'place_subcategory'] = 'Work'
+
     return mp, cbg_gdf,brh_np
 def add_raw_visit_counts(mp):
     mp.loc[:, 'popularity_by_hour_sum'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(literal_eval(x)) if isinstance(x, str) else sum(x))
