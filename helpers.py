@@ -14,7 +14,6 @@ def load_data():
     mp=pd.read_csv('/content/drive/MyDrive/data/mp.csv')
     brh_np=pd.read_csv('/content/drive/MyDrive/data/brh_np.csv')
 
-    mp=mp[mp['PLACEKEY']!='222-222@8gk-tdk-q2k']
     cbg_gdf=gpd.read_file('/content/drive/MyDrive/data/brh_cbg.geojson')
     #cbg_gdf['cbg'] = cbg_gdf['cbg'].astype(str).str.zfill(12).astype(int)
     mp=process_cbg_data_v2(mp, cbg_gdf, 'RAW_VISITOR_COUNTS', 'VISITOR_HOME_CBGS')
