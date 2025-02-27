@@ -125,7 +125,7 @@ sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Res
                                                   'Intercity Bus':['Interurban and Rural Bus Transportation'],
                                                   'Charter Bus':['Charter Bus Industry'],
                                                   'Car Rental':['Passenger Car Rental'],
-                                                  'Marina':['Port and Harbor Operations'],
+                                                  'Port':['Port and Harbor Operations'],
                                                   'Airport Shuttle':['All Other Transit and Ground Passenger Transportation','Transit and Ground Passenger Transportation','Other Support Activities for Air Transportation'],
                                                   'Towing Company':['Motor Vehicle Towing'],
                                                   'Taxi & Limo':['Limousine Service','Taxi Service']},
