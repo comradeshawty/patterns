@@ -648,6 +648,21 @@ def update_mp_from_w(mp, columns_to_update=['PARENT_PLACEKEY','LOCATION_NAME','T
             mask = (w_values.notna()) & (mp[col] != w_values)
             mp.loc[mask, col] = w_values[mask]
     return mp
+def update_mp_from_g(mp, columns_to_update=['LOCATION_NAME','place_category','place_subcategory']):
+    g=pd.read_csv('/content/drive/MyDrive/data/geocoded_results.csv')
+    g=gpd.GeoDataFrame(g,geometry=gpd.points_from_xy(g.LONGITUDE,g.LATITUDE),crs='epsg:4326')
+    mp=gpd.GeoDataFrame(g,geometry=gpd.points_from_xy(g.LONGITUDE,g.LATITUDE),crs='epsg:4326')
+    g=g.to_crs(epsg:32616)
+    mp=mp.to_crs(epsg:32616)
+    gdf=gpd.sjoin(g,mp[['PLACEKEY','geometry']],predicate='dwithin',distance=1,how='inner')
+    
+    w_lookup = {col: gdf.set_index("PLACEKEY")[col].to_dict() for col in columns_to_update}
+    for col in columns_to_update:
+        if col in mp.columns:
+            w_values = mp["PLACEKEY"].map(w_lookup[col])
+            mask = (w_values.notna()) & (mp[col] != w_values)
+            mp.loc[mask, col] = w_values[mask]
+    return mp
 
 def merge_duplicate_pois(mp, save_path="/content/drive/MyDrive/data/removed_duplicate_pois.csv"):
     """
