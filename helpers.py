@@ -9,7 +9,7 @@ from shapely.geometry import Point
 import numpy as np
 import json
 from cbgs_processor import process_cbg_data_v2,compute_weighted_and_simple_median_distance
-from recategorize_patterns import SUB_CATEGORY_MAPPING,sub_categories_to_pretty_names,preprocess_mp,update_mp_from_w,merge_duplicate_pois,update_mp,update_category,assign_place_category_and_subcategory,assign_specific_subcategories
+from recategorize_patterns import SUB_CATEGORY_MAPPING,update_mp_from_g,sub_categories_to_pretty_names,preprocess_mp,update_mp_from_w,merge_duplicate_pois,update_mp,update_category,assign_place_category_and_subcategory,assign_specific_subcategories
 def load_data():
     mp=pd.read_csv('/content/drive/MyDrive/data/mp.csv')
     brh_np=pd.read_csv('/content/drive/MyDrive/data/brh_np.csv')
@@ -27,6 +27,7 @@ def load_data():
     mp=assign_place_category_and_subcategory(mp, SUB_CATEGORY_MAPPING, sub_categories_to_pretty_names)
     mp=assign_specific_subcategories(mp)
     mp = compute_weighted_and_simple_median_distance(mp, cbg_gdf)
+    mp=update_mp_from_g(mp)
     mp.loc[mp['place_category'] == 'Other', 'place_category'] = 'Work'
     mp.loc[mp['place_category'] == 'Work', 'place_subcategory'] = 'Work'
 
