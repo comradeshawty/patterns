@@ -854,9 +854,11 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
                                            'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']}
     coffee_keywords=['Coffee','Bakery','Treats','Creamery','Smoothie','Donuts',"Jeni's Splendid Ice Creams",'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']
     arts_keywords=["Performing Arts","Mural"]
+
     regex_patterns = {
-      category: r"\b(" + "|".join(map(re.escape, keywords)) + r")\b"
-      for category, keywords in category_keywords.items()}
+        category: r"\b(?:{})\b".format("|".join(map(re.escape, keywords)))
+        for category, keywords in category_keywords.items()
+    }
 
     # Step 3: Standardize LOCATION_NAME and CATEGORY_TAGS
     mp["LOCATION_NAME"] = mp["LOCATION_NAME"].str.strip()
