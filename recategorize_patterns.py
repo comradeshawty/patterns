@@ -637,6 +637,15 @@ def three_cat_label(mp):
 def convert_placekey_to_stop(mp, placekey, stop_name):
   mp.loc[mp['PLACEKEY'] == placekey, ['LOCATION_NAME', 'TOP_CATEGORY', 'SUB_CATEGORY', 'NAICS_CODE','CATEGORY_TAGS']] = [stop_name,'Urban Transit Systems','Bus and Other Motor Vehicle Transit Systems','485113','Bus Station,Buses']
   return mp
+def update_mp_from_other(mp, columns_to_update=['LOCATION_NAME','place_category','place_subcategory']):
+    g=pd.read_csv('/content/drive/MyDrive/data/other.csv')    
+    w_lookup = {col: g.set_index("PLACEKEY")[col].to_dict() for col in columns_to_update}
+    for col in columns_to_update:
+        if col in mp.columns:
+            w_values = mp["PLACEKEY"].map(w_lookup[col])
+            mask = (w_values.notna()) & (mp[col] != w_values)
+            mp.loc[mask, col] = w_values[mask]
+    return mp
   
 def update_mp_from_w(mp, columns_to_update=['PARENT_PLACEKEY','LOCATION_NAME','TOP_CATEGORY','SUB_CATEGORY','CATEGORY_TAGS','NAICS_CODE']):
     w=pd.read_excel('/content/drive/MyDrive/data/mp.xlsx')
