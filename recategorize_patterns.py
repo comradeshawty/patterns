@@ -893,6 +893,8 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
        ["place_category", "place_subcategory"]] = ["Personal Services", "Hair Salon"]
     mp.loc[mp["LOCATION_NAME"].str.contains(r"\bHealth Department\b", case=True, na=False), 
        ["place_category", "place_subcategory"]] = ["Social Support", "Public Health Clinic"]
+    mp.loc[mp["LOCATION_NAME"].str.contains("Bail Bond", case=True, na=False), 
+         ["place_category", "place_subcategory"]] = ["Personal Services", "Bail Bonds"]
 
 
     return mp
