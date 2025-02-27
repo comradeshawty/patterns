@@ -214,7 +214,7 @@ sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Res
                                                             'Credit Unions':['Credit Unions','All Other Nondepository Credit Intermediation','Other Activities Related to Credit Intermediation',],
                                                             'Financial Advisors':['Financial Advice','Investment Advice','Miscellaneous Financial Investment Activities'],
                                                             'Consumer Lending':['Consumer Lending'],
-                                                            'Accoutants':['Tax Preparation Services','Other Accounting Services']},
+                                                            'Accountants':['Tax Preparation Services','Other Accounting Services']},
                                 'Healthcare':{'Physical Therapist':['Offices of Physical, Occupational and Speech Therapists, and Audiologists'],
                                               'Kidney Dialysis Center':['Kidney Dialysis Centers'],'Medical Laboratories':['Medical Laboratories'],
                                               'Family Planning Center':['Family Planning Centers'],'Blood Bank':['Blood and Organ Banks'],
