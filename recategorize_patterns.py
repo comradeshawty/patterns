@@ -842,8 +842,7 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
         "Transportation": ["Greyhound", "Amtrak", "Airport", "Bus Station", "Train Station",
                            "Parking", "Taxi", "Terminal", "Travel", "Tunnel"],
         'Coffee Shops, Snacks & Bakeries':['Coffee','Bakery','Treats','Creamery','Smoothie','Donuts',"Jeni's Splendid Ice Creams",
-                                           'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']
-    }
+                                           'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']}
     coffee_keywords=['Coffee','Bakery','Treats','Creamery','Smoothie','Donuts',"Jeni's Splendid Ice Creams",'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']
     arts_keywords=["Performing Arts","Mural"]
     # Step 3: Standardize LOCATION_NAME and CATEGORY_TAGS
@@ -860,7 +859,6 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
         else:
             tag_match = False  # If CATEGORY_TAGS doesn't exist, skip this condition
 
-        # Apply update only if at least one of the conditions is True
         update_mask = (name_match | tag_match) & (mp["place_category"] == "Other")
         mp.loc[update_mask, "place_category"] = category
 
@@ -871,6 +869,20 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
     mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_category']='City/Outdoors'
     mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_subcategory']='Housing Authority'
     mp.loc[mp['PLACEKEY']=='zzw-223@8gk-tv9-qpv','place_category']='College'
+    motel_brands = ['Quality Inn', 'Pear Tree Inn', 'Sleep Inn', 'Holiday Inn', 'InTown Suites', 'Comfort Inn', 
+        'Holiday Inn Express', 'Days Inn', 'Best Western', 'Microtel Inn and Suites', 'Super 8', 
+        'Budgetel Inn', 'Econo Lodge', 'Key West Inn']   
+    mp.loc[mp["BRANDS"].isin(motel_brands), ["place_category", "place_subcategory"]] = ["Personal Services", "Motel"]
+    bike_keywords = ['Bike', 'Bikes', 'Bicycle', 'Bicycles']
+    mp.loc[mp["LOCATION_NAME"].isin(bike_keywords), ["place_category", "place_subcategory"]] = ["Discretionary Retail", "Bike Shop"]
+    seminary_mask = (
+        (mp["CATEGORY_TAGS"].str.contains("Seminary School", case=False, na=False)) |
+        (mp["LOCATION_NAME"].str.contains("Theology", case=False, na=False)))
+
+    mp.loc[seminary_mask, ["place_category", "place_subcategory"]] = ["College", "Seminary School"]
+    mp.loc[mp["LOCATION_NAME"] == "Hair Salon", ["place_category", "place_subcategory"]] = ["Personal Services", "Hair Salon"]
+
+
     return mp
 
 def assign_specific_subcategories(mp): 
@@ -881,10 +893,8 @@ def assign_specific_subcategories(mp):
         'Ice Cream & Frozen Yogurt': ['Cold Stone Creamery', "Freddy's Frozen Custard",'Yogurt Mountain', 
                                       'Baskin Robbins', 'TCBY', 'Orange Julius','Marble Slab Creamery',
                                       "Bruster's Ice Cream"],
-        'Smoothie & Juice Bar': ['Tropical Smoothie Café','Clean Juice','Jamba','Planet Smoothie']
-    }
+        'Smoothie & Juice Bar': ['Tropical Smoothie Café','Clean Juice','Jamba','Planet Smoothie']}
 
-    # Function to check if any of the keywords exist in the specified columns
     def match_subcategory(row):
         if row["place_category"] != "Coffee Shops, Snacks & Bakeries":
             return row["place_subcategory"]  # If not in the category, retain existing value
