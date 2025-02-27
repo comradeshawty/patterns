@@ -30,7 +30,7 @@ SUB_CATEGORY_MAPPING={'Restaurants':['Full-Service Restaurants','Casino Hotels',
                                      'Social Assistance', 'Outpatient Mental Health and Substance Abuse Centers', 'Child and Youth Services',
                                      'Administration of Housing Programs, Urban Planning, and Community Development','Administration of Human Resource Programs'],
                       'Religious Organizations': ['Religious Organizations'],
-                      'School':['Elementary and Secondary Schools','Other Schools and Instruction','All Other Amusement and Recreation Industries'],
+                      'School':['Elementary and Secondary Schools','Other Schools and Instruction'],
                       'Financial, Legal, Real Estate and Insurance Services':['Tax Preparation Services','Other Accounting Services','Financial Advice','Consumer Lending','Investment Advice','Accounting, Tax Preparation, Bookkeeping, and Payroll Services','Miscellaneous Financial Investment Activities','Credit Unions','All Other Nondepository Credit Intermediation','Other Activities Related to Credit Intermediation','Offices of Notaries','Commercial Banking','Offices of Lawyers','Insurance Agencies and Brokerages','Direct Life Insurance Carriers',
                                                                                 'Other Direct Insurance (except Life, Health, and Medical) Carriers','Mortgage and Nonmortgage Loan Brokers','Tax Preparation Services','Other Accounting Services','Offices of Real Estate Agents and Brokers','Residential Property Managers'],
                       'City/Outdoors':['Cemeteries and Crematories','Justice, Public Order, and Safety Activities','RV (Recreational Vehicle) Parks and Recreational Camps','Nature Parks and Other Similar Institutions',
@@ -865,7 +865,11 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
         mp.loc[update_mask, "place_category"] = category
 
     mp.loc[mp['LOCATION_NAME'].str.contains('Pharmacy', case=True, na=False), 'place_category'] = 'Retail for Basic Necessities'
-    mp.loc[mp['LOCATION_NAME'].str.contains('Recreation Center', case=True, na=False), 'place_category'] = 'City/Outdoors'
+    rec_mask = (
+        (mp["CATEGORY_TAGS"].str.contains("Recreation Center", case=True, na=False)) |
+        (mp["LOCATION_NAME"].str.contains("Recreation", case=True, na=False)))
+
+    mp.loc[rec_mask, ["place_category", "place_subcategory"]] = ["City/Outdoors", "Recreation Center"]
     mp.loc[mp["LOCATION_NAME"].str.contains("|".join(coffee_keywords), case=True, na=False),'place_category']=='Coffee Shops, Snacks & Bakeries'
     mp.loc[mp["LOCATION_NAME"].str.contains("|".join(arts_keywords), case=True, na=False),'place_category']=='Arts and Culture'
     mp.loc[mp['PLACEKEY']=='227-222@8gk-td2-n5z','place_category']='City/Outdoors'
