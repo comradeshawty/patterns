@@ -649,7 +649,7 @@ def update_mp_from_w(mp, columns_to_update=['PARENT_PLACEKEY','LOCATION_NAME','T
             mp.loc[mask, col] = w_values[mask]
     return mp
 def update_mp_from_g(mp, columns_to_update=['LOCATION_NAME','place_category','place_subcategory']):
-    g=pd.read_csv('/content/drive/MyDrive/data/geocoded_results.csv')
+    g=pd.read_csv('/content/drive/MyDrive/data/geocoded_results_cleaned.csv')
     g=gpd.GeoDataFrame(g,geometry=gpd.points_from_xy(g.LONGITUDE,g.LATITUDE),crs='epsg:4326')
     mp=gpd.GeoDataFrame(g,geometry=gpd.points_from_xy(g.LONGITUDE,g.LATITUDE),crs='epsg:4326')
     g=g.to_crs(epsg=32616)
