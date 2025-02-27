@@ -192,7 +192,7 @@ sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Res
                                                         'Home Improvement Store':['All Other Miscellaneous Wood Product Manufacturing','Building Material and Supplies Dealers','Other Building Material Dealers','Home Centers','Paint and Wallpaper Stores','Other Wood Product Manufacturing'],
                                                         'Household Appliance Store':['Household Appliance Stores','Appliance Repair and Maintenance'],
                                                         'Cosmetics/Fragrance Store':['Cosmetics, Beauty Supplies, and Perfume Stores'],
-                                                        'Health Supplement Store':['Food (Health) Supplement Stores'],
+                                                        'Health Food Store':['Food (Health) Supplement Stores'],
                                                         'Smoke Shop':['Tobacco Stores'],
                                                         'Rental':['General Rental Centers','All Other Consumer Goods Rental'],
                                                         'Liquor Store':['Beer, Wine, and Liquor Stores'],
