@@ -652,8 +652,8 @@ def update_mp_from_g(mp, columns_to_update=['LOCATION_NAME','place_category','pl
     g=pd.read_csv('/content/drive/MyDrive/data/geocoded_results.csv')
     g=gpd.GeoDataFrame(g,geometry=gpd.points_from_xy(g.LONGITUDE,g.LATITUDE),crs='epsg:4326')
     mp=gpd.GeoDataFrame(g,geometry=gpd.points_from_xy(g.LONGITUDE,g.LATITUDE),crs='epsg:4326')
-    g=g.to_crs(epsg:32616)
-    mp=mp.to_crs(epsg:32616)
+    g=g.to_crs(epsg=32616)
+    mp=mp.to_crs(epsg=32616)
     gdf=gpd.sjoin(g,mp[['PLACEKEY','geometry']],predicate='dwithin',distance=1,how='inner')
     
     w_lookup = {col: gdf.set_index("PLACEKEY")[col].to_dict() for col in columns_to_update}
