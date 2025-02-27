@@ -240,7 +240,7 @@ sub_categories_to_pretty_names={'Restaurants':{'Fast Food':['Limited-Service Res
                                 'Social Support':{'Home Health Care':['Home Health Care Services'],
                                                   'Community Housing Services':['Community Housing Services'],
                                                   'Daycare Center':['Child Day Care Services','Child Care'],
-                                                  'Disability Services':['Services for the Elderly and Persons with Disabilities'],
+                                                  'Services for the Elderly and Persons with Disabilities':['Services for the Elderly and Persons with Disabilities'],
                                                   'Library':['Libraries and Archives'],
                                                   'Community Center':['Other Individual and Family Services'],
                                                   'Social Security Office':['Administration of Human Resource Programs (except Education, Public Health, and Veterans Affairs Programs)'],
@@ -393,7 +393,6 @@ def update_mp(mp):
   mp.loc[mp['LOCATION_NAME'].str.contains('University', na=False, case=False), 'CATEGORY_TAGS'] = 'University'
   mp=mp[mp['PLACEKEY']!='zzw-225@8gk-tmr-2ff']
   mp=update_placekey_info(mp,['zzw-225@8gk-tmr-2ff'],new_subcategory='All Other Home Furnishings Stores')
-  mp.loc[(mp['LOCATION_NAME'].str.contains('Academy', na=False, case=False)) & (mp['TOP_CATEGORY'] != 'Elementary and Secondary Schools'), 'TOP_CATEGORY'] = 'Other Schools and Instruction'
   mp=update_placekey_info(mp,['zzy-227@8gk-tv3-g49','zzy-222@8gk-tv4-ckf'],new_top_category='Other Personal Services',new_subcategory='Parking Lots and Garages',new_naics_code='812930')
   matching_placekeys = mp[mp['LOCATION_NAME'].str.contains(r'\bchamber\s*of\s*commerce\b', flags=re.IGNORECASE, regex=True, na=False)]['PLACEKEY'].tolist()
   if matching_placekeys:
@@ -847,20 +846,24 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
                                            'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']}
     coffee_keywords=['Coffee','Bakery','Treats','Creamery','Smoothie','Donuts',"Jeni's Splendid Ice Creams",'Yogurt','Doughnuts','Tea','Teahouse','Ice Creams','Ice Cream','Crumbl Cookies','Frutta Bowls']
     arts_keywords=["Performing Arts","Mural"]
+    regex_patterns = {
+      category: r"\b(" + "|".join(map(re.escape, keywords)) + r")\b"
+      for category, keywords in category_keywords.items()}
+
     # Step 3: Standardize LOCATION_NAME and CATEGORY_TAGS
     mp["LOCATION_NAME"] = mp["LOCATION_NAME"].str.strip()
     if "CATEGORY_TAGS" in mp.columns:
         mp["CATEGORY_TAGS"] = mp["CATEGORY_TAGS"].str.strip()
 
-    # Step 4: Assign categories only if at least one match occurs
-    for category, keywords in category_keywords.items():
-        name_match = mp["LOCATION_NAME"].isin(keywords)  # Exact match for LOCATION_NAME
-
+    for category, pattern in regex_patterns.items():
+        name_match = mp["LOCATION_NAME"].str.contains(pattern, regex=True, case=True, na=False)
+        
         if "CATEGORY_TAGS" in mp.columns:
-            tag_match = mp["CATEGORY_TAGS"].isin(keywords)  # Exact match for CATEGORY_TAGS
+            tag_match = mp["CATEGORY_TAGS"].str.contains(pattern, regex=True, case=True, na=False)
         else:
             tag_match = False  # If CATEGORY_TAGS doesn't exist, skip this condition
-
+    
+        # Apply update only if at least one condition is True
         update_mask = (name_match | tag_match) & (mp["place_category"] == "Other")
         mp.loc[update_mask, "place_category"] = category
 
@@ -886,7 +889,10 @@ def assign_place_category_and_subcategory(mp, sub_category_mapping, sub_categori
         (mp["LOCATION_NAME"].str.contains("Theology", case=False, na=False)))
 
     mp.loc[seminary_mask, ["place_category", "place_subcategory"]] = ["College", "Seminary School"]
-    mp.loc[mp["LOCATION_NAME"] == "Hair Salon", ["place_category", "place_subcategory"]] = ["Personal Services", "Hair Salon"]
+    mp.loc[mp["LOCATION_NAME"].str.contains(r"\bHair Salon\b", case=True, na=False), 
+       ["place_category", "place_subcategory"]] = ["Personal Services", "Hair Salon"]
+    mp.loc[mp["LOCATION_NAME"].str.contains(r"\bHealth Department\b", case=True, na=False), 
+       ["place_category", "place_subcategory"]] = ["Social Support", "Public Health Clinic"]
 
 
     return mp
