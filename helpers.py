@@ -33,7 +33,7 @@ def load_data():
     mp=update_mp_from_other(mp)
     mp.loc[mp['place_category'] == 'Other', 'place_category'] = 'Work'
     mp.loc[mp['place_category'] == 'Work', 'place_subcategory'] = 'Work'
-    mp.drop(columns=['visits_by_day_sum','visit_counts_cbg_scaled','total_alpha',],inplace=True)
+    mp.drop(columns=['visits_by_day_sum','visit_counts_cbg_scaled'],inplace=True)
 
     cbg_gdf=agg_race_cols(cbg_gdf)
 
