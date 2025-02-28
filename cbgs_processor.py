@@ -144,7 +144,7 @@ def compute_weighted_and_simple_median_distance(mp, cbg_gdf):
 
 def normalize_cbg_data(cbg_gdf):
     normalize_by_tot_pop = ["white_age", "black_age", "american_indian_age", "asian_age", "other_race_age","two_race_age", "white_alone_age", "hispanic_age",
-                            "hispanic_pop", "non_hispanic_pop","white_pop", "black_pop", "american_indian_pop", "asian_pop", "hawaiian_pop",
+                            "hispanic_pop", "non_hispanic_pop","white_pop", "black_pop", "american_indian_pop", "asian_pop", "hawaiian_pop","oth_race_pop",
         "other_race_pop", "two_race_pop", "tot_18_to_65", "below_poverty", "with_disability","working_walked", "working_transit", "commuting_pop","working_pop"]
     normalize_by_pop_in_hh = ["no_veh_renter", "no_veh_owner"]
     for col in normalize_by_tot_pop:
