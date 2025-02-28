@@ -221,7 +221,7 @@ def compute_racial_segregation_with_cbsa_baseline(df, cbg_gdf):
     
     # Compute absolute differences from the baseline.
     abs_diff = (weighted_means_df - baseline).abs()
-    df['S_alpha_race'] = constant_factor * abs_diff.sum(axis=1)
+    df['S_alpha_race_v2'] = constant_factor * abs_diff.sum(axis=1)
     
     # --- 2. Compute experienced racial segregation for each CBG ---
     # Calculate total visits per CBG across all POIs.
@@ -266,6 +266,6 @@ def compute_racial_segregation_with_cbsa_baseline(df, cbg_gdf):
     
     # Map experienced segregation back to cbg_gdf.
     cbg_gdf["cbg"] = cbg_gdf["cbg"].astype(str).str.lstrip("0").astype(int)
-    cbg_gdf["experienced_racial_segregation"] = cbg_gdf["cbg"].map(experienced_segregation)
+    cbg_gdf["Si_race_v2"] = cbg_gdf["cbg"].map(experienced_segregation)
     
     return df, cbg_gdf
