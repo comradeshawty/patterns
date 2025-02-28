@@ -114,3 +114,158 @@ def compute_racial_segregation_with_exposure(df, cbg_gdf):
     cbg_gdf["Si_race"] = cbg_gdf["cbg"].map(experienced_segregation)
     
     return df, cbg_gdf
+
+
+def compute_racial_segregation_with_cbsa_baseline(df, cbg_gdf):
+    """
+    Compute both POI-level and experienced racial segregation metrics using the overall CBSA racial distribution as baseline.
+    
+    The weighted_means column in df is expected to have keys:
+      ['white_pop_frac', 'black_pop_frac', 'asian_pop_frac', 'oth_race_pop_frac', 'two_race_pop_frac', 'hispanic_pop_frac']
+      
+    We map these keys to the corresponding race names in the CBSA data:
+      white_pop_frac      -> white_pop
+      black_pop_frac      -> black_pop
+      asian_pop_frac      -> asian_pop
+      oth_race_pop_frac   -> other_race_pop
+      two_race_pop_frac   -> two_race_pop
+      hispanic_pop_frac   -> hispanic_pop
+      
+    For each POI, the racial segregation measure is:
+        S_alpha_race = (n / (2*n - 2)) * sum(|τ(r,α) - baseline(r)|)
+    where:
+      - n is the number of racial groups (here 6),
+      - τ(r,α) is the weighted fraction for race r at the POI,
+      - baseline(r) is the overall racial fraction from CBSA census data.
+    
+    For each CBG, the experienced segregation is:
+        S_r_experienced = (n / (2*n - 2)) * sum(|τ(b, r) - baseline(r)|)
+    where τ(b, r) is the accumulated exposure for race r from all POIs visited by the CBG.
+    
+    A sanity check ensures that each weighted_means dictionary has the expected keys.
+    
+    Parameters:
+      df : pandas.DataFrame
+          DataFrame with each POI as a row. Must have:
+            - "weighted_means": dict with keys like ['white_pop_frac', ... 'hispanic_pop_frac'] and corresponding fractions.
+            - "adjusted_cbg_visitors": dict mapping CBG identifiers to visitor counts.
+      cbg_gdf : pandas.DataFrame or geopandas.GeoDataFrame
+          DataFrame with CBG data. Must have a "cbg" column that maps to the keys in visitor counts.
+    
+    Returns:
+      tuple: 
+         - df: Input DataFrame with an added "S_alpha_race" column for POI-level segregation.
+         - cbg_gdf: The CBG GeoDataFrame with an added "experienced_racial_segregation" column.
+    """
+    # Mapping from weighted_means keys to CBSA race names.
+    mapping = {
+        "white_pop_frac": "white_pop",
+        "black_pop_frac": "black_pop",
+        "asian_pop_frac": "asian_pop",
+        "oth_race_pop_frac": "other_race_pop",
+        "two_race_pop_frac": "two_race_pop",
+        "hispanic_pop_frac": "hispanic_pop"
+    }
+    
+    expected_keys = set(mapping.keys())
+    
+    # Sanity check on the first row of weighted_means.
+    sample_weights = df['weighted_means'].iloc[0]
+    provided_keys = set(sample_weights.keys())
+    if provided_keys != expected_keys:
+        raise ValueError(f"Expected weighted_means keys: {expected_keys}, but got: {provided_keys}")
+
+    # Define the order of races for vectorized operations.
+    race_order = [mapping[k] for k in sorted(mapping.keys())]
+    weighted_keys_order = sorted(mapping.keys())  # Sorting keys to enforce consistent order.
+    n = len(race_order)  # should be 6
+    
+    # Constant factor in segregation formula.
+    constant_factor = n / (2 * n - 2)
+    
+    # Obtain overall CBSA racial distribution from census data.
+    racial_data = get_racial_data()
+    tot_pop = racial_data.loc[racial_data['Race'] == 'tot_pop', 'Count'].values[0]
+    
+    # Build the baseline vector based on the mapping order.
+    baseline = []
+    for race in race_order:
+        race_count_series = racial_data.loc[racial_data['Race'] == race, 'Count']
+        if not race_count_series.empty:
+            baseline.append(float(race_count_series.values[0]) / tot_pop)
+        else:
+            baseline.append(0.0)
+    baseline = np.array(baseline, dtype=float)
+    
+    # --- 1. Compute POI-level racial segregation ---
+    # Convert weighted_means dictionaries into a DataFrame with columns ordered by weighted_keys_order.
+    def convert_weighted_means(weighted_means):
+        # Rearrange the values into the order of weighted_keys_order.
+        return [weighted_means[k] for k in weighted_keys_order]
+    
+    weighted_means_df = pd.DataFrame(df['weighted_means'].apply(convert_weighted_means).tolist(),
+                                     index=df.index,
+                                     columns=weighted_keys_order)
+    weighted_means_df = weighted_means_df.fillna(0)
+    
+    # For POI-level segregation, create an array representing the weighted means in the order matching baseline.
+    # However, our baseline is built over race_order, so we must reorder weighted_means columns accordingly.
+    # Create a mapping from weighted key to its corresponding CBSA race.
+    col_order = []
+    for k in weighted_keys_order:
+        col_order.append(mapping[k])
+    # Create a DataFrame with columns renamed to the CBSA race names.
+    weighted_means_df = weighted_means_df.rename(columns=mapping)
+    # Reorder columns to match race_order.
+    weighted_means_df = weighted_means_df[race_order]
+    
+    # Compute absolute differences from the baseline.
+    abs_diff = (weighted_means_df - baseline).abs()
+    df['S_alpha_race'] = constant_factor * abs_diff.sum(axis=1)
+    
+    # --- 2. Compute experienced racial segregation for each CBG ---
+    # Calculate total visits per CBG across all POIs.
+    total_visits_per_cbg = {}
+    for visitors in df['adjusted_cbg_visitors']:
+        for cbg, count in visitors.items():
+            try:
+                cbg_int = int(cbg)
+            except Exception:
+                continue
+            total_visits_per_cbg[cbg_int] = total_visits_per_cbg.get(cbg_int, 0) + count
+
+    # Accumulate each CBG's exposure using a defaultdict.
+    cbg_exposure = defaultdict(lambda: np.zeros(n, dtype=float))
+    
+    # Function to accumulate exposure contributions across POIs.
+    def accumulate_exposure(row):
+        visitor_dict = row['adjusted_cbg_visitors']
+        # Convert weighted_means for this row into a consistent numpy array aligned with race_order.
+        proportions = np.array([row["weighted_means"][k] for k in weighted_keys_order], dtype=float)
+        # Rename array to match CBSA race names.
+        # Build a dictionary mapping CBSA race -> value.
+        prop_dict = {mapping[k]: v for k, v in zip(weighted_keys_order, proportions)}
+        # Create the exposure vector in the order of race_order.
+        proportions_ordered = np.array([prop_dict[race] for race in race_order], dtype=float)
+        for cbg, count in visitor_dict.items():
+            try:
+                cbg_int = int(cbg)
+            except Exception:
+                continue
+            total_for_cbg = total_visits_per_cbg.get(cbg_int, 0)
+            if total_for_cbg > 0:
+                tau_b_alpha = count / total_for_cbg
+                cbg_exposure[cbg_int] += tau_b_alpha * proportions_ordered
+                
+    df.apply(accumulate_exposure, axis=1)
+    
+    # Compute experienced segregation for each CBG.
+    experienced_segregation = {}
+    for cbg, exposure in cbg_exposure.items():
+        experienced_segregation[cbg] = constant_factor * np.sum(np.abs(exposure - baseline))
+    
+    # Map experienced segregation back to cbg_gdf.
+    cbg_gdf["cbg"] = cbg_gdf["cbg"].astype(str).str.lstrip("0").astype(int)
+    cbg_gdf["experienced_racial_segregation"] = cbg_gdf["cbg"].map(experienced_segregation)
+    
+    return df, cbg_gdf
