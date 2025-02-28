@@ -8,6 +8,8 @@ from ast import literal_eval
 from shapely.geometry import Point
 import numpy as np
 import json
+from racial_segregation import agg_race_cols
+
 from cbgs_processor import process_cbg_data_v2,compute_weighted_and_simple_median_distance
 from recategorize_patterns import SUB_CATEGORY_MAPPING,update_mp_from_g,update_mp_from_other,sub_categories_to_pretty_names,preprocess_mp,update_mp_from_w,merge_duplicate_pois,update_mp,update_category,assign_place_category_and_subcategory,assign_specific_subcategories
 def load_data():
@@ -31,6 +33,7 @@ def load_data():
     mp=update_mp_from_other(mp)
     mp.loc[mp['place_category'] == 'Other', 'place_category'] = 'Work'
     mp.loc[mp['place_category'] == 'Work', 'place_subcategory'] = 'Work'
+    cbg_gdf=agg_race_cols(cbg_gdf)
 
     return mp, cbg_gdf,brh_np
 def add_raw_visit_counts(mp):
