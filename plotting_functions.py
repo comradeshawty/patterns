@@ -169,10 +169,10 @@ def plot_seg(mp):
 
     plt.title("Distribution of income_segregation by Place Category", fontsize=14)
     plt.xlabel("Place Category")
-    plt.ylabel("income_segregation")
+    plt.ylabel("Sα")
     plt.xticks(rotation=45, ha="right")
     plt.show()
-def plot_racial_entropy(mp):
+def plot_racial_seg(mp):
     """Plots violin + strip plot for income segregation across place categories."""
     plt.figure(figsize=(12, 6))
     sns.violinplot(data=mp.dropna(subset='local_entropy'), x="place_category", y="local_entropy", palette="tab20", inner=None, alpha=0.7)
@@ -180,6 +180,6 @@ def plot_racial_entropy(mp):
 
     plt.title("Distribution of racial entropy by Place Category", fontsize=14)
     plt.xlabel("Place Category")
-    plt.ylabel("local_entropy")
+    plt.ylabel("S_alpha_race")
     plt.xticks(rotation=45, ha="right")
     plt.show()
