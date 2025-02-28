@@ -157,10 +157,10 @@ def compute_income_segregation(df, cbg_gdf):
                 cbg_exposure[cbg_int] = np.array(contribution, dtype=float)
     
     # Add POI-level segregation scores to df.
-    df['income_segregation'] = poi_segregation_scores
-    null_rows = df[df['income_segregation'].isnull()]
+    df['Sα'] = poi_segregation_scores
+    null_rows = df[df['Sα'].isnull()]
     null_rows.to_csv('/content/drive/MyDrive/data/null_income_segregation.csv', index=False)
-    df.dropna(subset=['income_segregation'], inplace=True, ignore_index=True)
+    df.dropna(subset=['Sα'], inplace=True, ignore_index=True)
     
     # Now compute experienced income segregation for each CBG.
     experienced_segregation = {}
@@ -170,6 +170,6 @@ def compute_income_segregation(df, cbg_gdf):
         experienced_segregation[cbg] = segregation_value
     
     # Map experienced segregation back to the cbg_gdf.
-    cbg_gdf['S_i'] = cbg_gdf['cbg'].map(experienced_segregation)
+    cbg_gdf['Si'] = cbg_gdf['cbg'].map(experienced_segregation)
     
     return df, cbg_gdf
