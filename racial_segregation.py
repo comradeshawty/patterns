@@ -67,7 +67,7 @@ def compute_racial_segregation_with_exposure(df, cbg_gdf):
     # Compute absolute differences from the ideal equal share (1/n)
     abs_diff = (weighted_means_df - (1.0 / n)).abs()
     # Compute the segregation score for each POI
-    df['Sα_race'] = constant_factor * abs_diff.sum(axis=1)
+    df['S_alpha_race'] = constant_factor * abs_diff.sum(axis=1)
     
     # --- 2. Compute experienced racial segregation per CBG ---
     
