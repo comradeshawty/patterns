@@ -31,6 +31,7 @@ def load_data():
     mp = compute_weighted_and_simple_median_distance(mp, cbg_gdf)
     mp=update_mp_from_g(mp)
     mp=update_mp_from_other(mp)
+    mp=stop_distance(mp)
     mp.loc[mp['place_category'] == 'Other', 'place_category'] = 'Work'
     mp.loc[mp['place_category'] == 'Work', 'place_subcategory'] = 'Work'
     mp.drop(columns=['visits_by_day_sum','visit_counts_cbg_scaled'],inplace=True)
@@ -38,6 +39,11 @@ def load_data():
     cbg_gdf=agg_race_cols(cbg_gdf)
 
     return mp, cbg_gdf,brh_np
+def stop_distance(mp):
+    mp["nearby_stop_distances"] = mp["nearby_stop_distances"].apply(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+    mp["avg_distance_to_stop"] = mp["nearby_stop_distances"].apply(lambda x: np.mean(x) if x else np.nan)
+    return mp
+
 def add_raw_visit_counts(mp):
     mp.loc[:, 'popularity_by_hour_sum'] = mp['POPULARITY_BY_HOUR'].apply(lambda x: sum(literal_eval(x)) if isinstance(x, str) else sum(x))
     mp.loc[:, 'visits_by_day_sum'] = mp['VISITS_BY_DAY'].apply(lambda x: sum(literal_eval(x)) if isinstance(x, str) else sum(x))
