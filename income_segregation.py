@@ -74,26 +74,31 @@ def compute_income_segregation(df, cbg_gdf):
     and the experienced income segregation measure is:
          Sᵢ = (2/3) * Σ₍q=1...4₎ |τ₍b,q₎ − 0.25|
     
+    Additionally, this function adds a column to df named 'quartile_proportions'
+    which contains, for each POI, a dictionary with the proportions of visitors from each income quartile.
+    The dictionary is formatted as: {'low': prop, 'lower_middle': prop, 'upper_middle': prop, 'high': prop}
+    
     Parameters:
       df     : DataFrame that includes the 'adjusted_cbg_visitors' column containing the processed visitor counts.
       cbg_gdf: GeoDataFrame with CBG information and an 'income_quantile' column; 
                the income labels for CBGs are in {"low", "lower_middle", "upper_middle", "high"}.
     
     Returns:
-      Tuple: (df with added column 'income_segregation', updated cbg_gdf with column 'experienced_income_segregation')
+      Tuple: (df with added columns 'income_segregation' and 'quartile_proportions', 
+              updated cbg_gdf with column 'experienced_income_segregation')
     """
     income_label_to_quartile = {"low": 1, "lower_middle": 2, "upper_middle": 3, "high": 4}
     
-    # Ensure CBGs in cbg_gdf are correctly formatted
+    # Ensure CBGs in cbg_gdf are correctly formatted.
     cbg_gdf["cbg"] = cbg_gdf["cbg"].astype(str).str.lstrip("0").astype(int)
     
-    # Create mapping: CBG → Income Quartile
+    # Create mapping: CBG → Income Quartile.
     cbg_income_map = cbg_gdf.set_index("cbg")["income_quantile"].map(income_label_to_quartile).to_dict()
     
     def segregation_from_dict(visitor_dict):
         """
-        Compute the POI-level income segregation score along with the income quartile proportions.
-        Returns a tuple: (POI segregation score, quartile proportions vector, total visits at the POI).
+        Compute the POI-level income segregation score along with the distribution of visitor proportions by quartile.
+        Returns a tuple: (segregation score, proportions array, proportions dictionary, total visitors at the POI).
         """
         quartile_counts = np.zeros(4, dtype=float)
         for cbg, count in visitor_dict.items():
@@ -103,23 +108,32 @@ def compute_income_segregation(df, cbg_gdf):
                 continue
             quartile = cbg_income_map.get(cbg_int, None)
             if quartile is not None:
-                quartile_counts[quartile - 1] += count  # store in 0-based index
+                quartile_counts[quartile - 1] += count  # store in 0-based index.
         
         total = quartile_counts.sum()
         if total == 0:
-            return np.nan  # Avoid division by zero
+            default_proportions = {"low": 0, "lower_middle": 0, "upper_middle": 0, "high": 0}
+            return np.nan, None, default_proportions, total
         
-        proportions = quartile_counts / total  # τ₍q,α₎ for each quartile at this POI
+        proportions = quartile_counts / total  # Fraction for each quartile.
         segregation = (2/3) * np.sum(np.abs(proportions - 0.25))
-        return segregation, proportions, total
+        proportions_dict = {
+            "low": proportions[0],
+            "lower_middle": proportions[1],
+            "upper_middle": proportions[2],
+            "high": proportions[3]
+        }
+        return segregation, proportions, proportions_dict, total
 
-    # Compute POI-level segregation scores and also prepare for CBG-level aggregation.
-    poi_segregation_scores = []  # will hold segregation score for each POI
+    # Compute POI-level segregation scores and prepare for CBG-level aggregation.
+    poi_segregation_scores = []         # Holds segregation score for each POI.
+    quartile_proportions_list = []        # Holds the proportions dictionary for each POI.
+    
     # Dictionary to hold total visits per CBG across all POIs.
     total_visits_per_cbg = {}
     # Dictionary to accumulate exposure contributions per CBG; key: cbg, value: np.array (length 4)
     cbg_exposure = {}
-
+    
     # First pass: calculate global total visits for each CBG across all POIs.
     for idx, row in df.iterrows():
         visitor_dict = row['adjusted_cbg_visitors']
@@ -133,44 +147,45 @@ def compute_income_segregation(df, cbg_gdf):
     # Second pass: compute each POI's quartile proportions and accumulate CBG exposure contributions.
     for idx, row in df.iterrows():
         visitor_dict = row['adjusted_cbg_visitors']
-        seg_result = segregation_from_dict(visitor_dict)
-        if seg_result is np.nan:
-            poi_segregation_scores.append(np.nan)
-            continue
-        poi_segreg, quartile_proportions, total_alpha = seg_result
-        poi_segregation_scores.append(poi_segreg)
+        segregation_value, proportions, proportions_dict, total_alpha = segregation_from_dict(visitor_dict)
+        
+        poi_segregation_scores.append(segregation_value)
+        quartile_proportions_list.append(proportions_dict)
+        
         # For each CBG present in the POI, compute its weight for this POI and add its exposure contribution.
         for cbg, count in visitor_dict.items():
             try:
                 cbg_int = int(cbg)
             except Exception:
                 continue
-            # τ₍b,α₎ for this POI b: fraction of the CBG's visits that occur at this POI.
-            if total_visits_per_cbg.get(cbg_int, 0) == 0:
+            global_total = total_visits_per_cbg.get(cbg_int, 0)
+            if global_total == 0 or proportions is None:
                 continue
-            tau_b_alpha = count / total_visits_per_cbg[cbg_int]
-            # Contribution for each income quartile.
-            contribution = tau_b_alpha * quartile_proportions
+            # τ₍b,α₎: fraction of the CBG's visits that occur at this POI.
+            tau_b_alpha = count / global_total
+            contribution = tau_b_alpha * proportions
             if cbg_int in cbg_exposure:
                 cbg_exposure[cbg_int] += contribution
             else:
                 cbg_exposure[cbg_int] = np.array(contribution, dtype=float)
-    
-    # Add POI-level segregation scores to df.
+                
+    # Add the computed POI-level income segregation scores and quartile proportions as new columns in df.
+    df = df.copy()
     df['Sα'] = poi_segregation_scores
-    null_rows = df[df['Sα'].isnull()]
-    null_rows.to_csv('/content/drive/MyDrive/data/null_income_segregation.csv', index=False)
-    df.dropna(subset=['Sα'], inplace=True, ignore_index=True)
-    
-    
-    # Now compute experienced income segregation for each CBG.
-    experienced_segregation = {}
-    for cbg, exposure in cbg_exposure.items():
-        # exposure is τ₍b,q₎: the CBG's relative exposure across the 4 income quartiles.
-        segregation_value = (2/3) * np.sum(np.abs(exposure - 0.25))
-        experienced_segregation[cbg] = segregation_value
-    
-    # Map experienced segregation back to the cbg_gdf.
-    cbg_gdf['Si'] = cbg_gdf['cbg'].map(experienced_segregation)
+    df['quartile_proportions'] = quartile_proportions_list
+
+    # Compute experienced income segregation for each CBG and add it to the cbg_gdf.
+    experienced_income_segregation = {}
+    for cbg, exposure_array in cbg_exposure.items():
+        exposure_sum = exposure_array.sum()
+        if exposure_sum == 0:
+            experienced_income_segregation[cbg] = np.nan
+        else:
+            normalized_exposure = exposure_array / exposure_sum
+            experienced_income_segregation[cbg] = (2/3) * np.sum(np.abs(normalized_exposure - 0.25))
+            
+    cbg_gdf = cbg_gdf.copy()
+    cbg_gdf['Si'] = cbg_gdf['cbg'].map(experienced_income_segregation)
     
     return df, cbg_gdf
+
