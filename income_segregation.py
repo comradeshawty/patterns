@@ -161,7 +161,7 @@ def compute_income_segregation(df, cbg_gdf):
     null_rows = df[df['Sα'].isnull()]
     null_rows.to_csv('/content/drive/MyDrive/data/null_income_segregation.csv', index=False)
     df.dropna(subset=['Sα'], inplace=True, ignore_index=True)
-    df['quartile_proportions']=quartile_proportions
+    
     
     # Now compute experienced income segregation for each CBG.
     experienced_segregation = {}
