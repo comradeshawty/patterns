@@ -17,6 +17,9 @@ def load_data():
     brh_np=pd.read_csv('/content/drive/MyDrive/data/brh_np.csv')
 
     cbg_gdf=gpd.read_file('/content/drive/MyDrive/data/brh_cbg.geojson')
+    if not isinstance(cbg_gdf, gpd.GeoDataFrame):
+        cbg_gdf = gpd.GeoDataFrame(cbg_gdf, geometry='geometry')
+
     #cbg_gdf['cbg'] = cbg_gdf['cbg'].astype(str).str.zfill(12).astype(int)
     mp=preprocess_mp(mp)
     mp=update_mp_from_w(mp)
