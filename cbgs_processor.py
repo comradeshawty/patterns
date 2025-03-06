@@ -155,7 +155,7 @@ def normalize_cbg_data(cbg_gdf):
             cbg_gdf[col + "_frac"] = cbg_gdf[col] / cbg_gdf["pop_in_hh"].replace(0, pd.NA)
     return cbg_gdf
 
-def compute_weighted_mean(df_m, cbg_gdf, columns, adjusted_cbg_visitors_col):
+def compute_weighted_mean(df_m, cbg_gdf, columns, adjusted_cbg_visitors_col='adjusted_cbg_visitors',weighted_means_col):
     cbg_dict = cbg_gdf.set_index('cbg')[columns].to_dict(orient='index')
 
     def get_weighted_mean(adjusted_cbg_counter, column):
@@ -170,8 +170,46 @@ def compute_weighted_mean(df_m, cbg_gdf, columns, adjusted_cbg_visitors_col):
             weighted_means[column] = get_weighted_mean(adjusted_cbg_counter, column)
         return weighted_means
 
-    df_m["weighted_means"] = df_m.apply(process_row, axis=1)
+    df_m[weighted_means_col] = df_m.apply(process_row, axis=1)
     return df_m
+
+def compute_racial_weighted_mean(df_m, cbg_gdf, columns = ['white_pop_frac', 'black_pop_frac', 'asian_pop_frac', 'oth_race_pop_frac', 'two_race_pop_frac','hispanic_pop_frac'], adjusted_cbg_visitors_col='adjusted_cbg_visitors',weighted_means_col='racial_weighted_means'):
+    cbg_dict = cbg_gdf.set_index('cbg')[columns].to_dict(orient='index')
+
+    def get_weighted_mean(adjusted_cbg_counter, column):
+        weighted_sum = sum(cbg_dict[cbg][column] * count for cbg, count in adjusted_cbg_counter.items() if cbg in cbg_dict)
+        total_visitors = sum(adjusted_cbg_counter.values())
+        return weighted_sum / total_visitors if total_visitors > 0 else np.nan
+
+    def process_row(row):
+        adjusted_cbg_counter = row[adjusted_cbg_visitors_col]
+        weighted_means = {}
+        for column in columns:
+            weighted_means[column] = get_weighted_mean(adjusted_cbg_counter, column)
+        return weighted_means
+
+    df_m[weighted_means_col] = df_m.apply(process_row, axis=1)
+    return df_m
+    
+def compute_income_weighted_mean(df_m, cbg_gdf, columns=['less_than_10k', '10k_15k', '15k_to_20k', '20k_to_25k', '25k_to_30k', '30k_to_35k', '35k_to_40k', '40k_to_45k', '45k_to_50k', '50k_to_60k', '60k_to_75k', '75k_to_100k', '100k_to_125k', '125k_to_150k', '150k_to_200k', '200k_or_more'],
+                                 adjusted_cbg_visitors_col='adjusted_cbg_visitors',weighted_means_col='income_weighted_means'):
+    cbg_dict = cbg_gdf.set_index('cbg')[columns].to_dict(orient='index')
+
+    def get_weighted_mean(adjusted_cbg_counter, column):
+        weighted_sum = sum(cbg_dict[cbg][column] * count for cbg, count in adjusted_cbg_counter.items() if cbg in cbg_dict)
+        total_visitors = sum(adjusted_cbg_counter.values())
+        return weighted_sum / total_visitors if total_visitors > 0 else np.nan
+
+    def process_row(row):
+        adjusted_cbg_counter = row[adjusted_cbg_visitors_col]
+        weighted_means = {}
+        for column in columns:
+            weighted_means[column] = get_weighted_mean(adjusted_cbg_counter, column)
+        return weighted_means
+
+    df_m[weighted_means_col] = df_m.apply(process_row, axis=1)
+    return df_m
+
 def compute_exact_visitor_counts(df_m, weighted_means_col, raw_visitor_col, demographic_col, new_col_name):
     df_m[new_col_name] = df_m.apply(lambda row: np.ceil(row[weighted_means_col].get(demographic_col, 0) * row[raw_visitor_col]).astype(int),axis=1)
     return df_m
