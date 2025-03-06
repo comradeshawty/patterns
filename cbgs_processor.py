@@ -215,8 +215,8 @@ def compute_exact_visitor_counts(df_m, weighted_means_col, raw_visitor_col, demo
     return df_m
 
 def compute_racial_visitor_counts(df_m, weighted_means_col, raw_visitor_col):
-    racial_columns = ['white_pop_frac', 'black_pop_frac', 'american_indian_pop_frac',
-                      'asian_pop_frac','hawaiian_pop_frac', 'other_race_pop_frac',
+    racial_columns = ['white_pop_frac', 'black_pop_frac',
+                      'asian_pop_frac', 'oth_race_pop_frac',
                       'two_race_pop_frac','hispanic_pop_frac']
     for col in racial_columns:
         new_col_name = col.replace('pop_frac', 'visitors')
