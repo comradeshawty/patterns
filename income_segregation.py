@@ -250,7 +250,7 @@ def compute_quintile_income_segregation(df, cbg_gdf):
         Compute the POI-level income segregation score along with the distribution of visitor proportions by quartile.
         Returns a tuple: (segregation score, proportions array, proportions dictionary, total visitors at the POI).
         """
-        quartile_counts = np.zeros(5, dtype=float)
+        quintile_counts = np.zeros(5, dtype=float)
         for cbg, count in visitor_dict.items():
             try:
                 cbg_int = int(cbg)
