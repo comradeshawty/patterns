@@ -59,7 +59,67 @@ Description: Data processing routines for income segregation analysis.
 """
 import numpy as np
 import pandas as pd
+def compute_residential_income_segregation(cbg_gdf):
+    """
+    Computes S_res (residential income segregation) for each CBG using
+    fixed bracket definitions for 'low', 'lower_middle', 'upper_middle', 'high'.
+    
+    Each row of cbg_gdf is expected to have columns representing the
+    number of households in these brackets:
+      'less_than_10k', '10k_15k', '15k_to_20k', '20k_to_25k', '25k_to_30k',
+      '30k_to_35k', '35k_to_40k', '40k_to_45k', '45k_to_50k', '50k_to_60k',
+      '60k_to_75k', '75k_to_100k', '100k_to_125k', '125k_to_150k',
+      '150k_to_200k', '200k_or_more'.
 
+    The category definitions (from bracket to income group) are:
+      low =  { 'less_than_10k', '10k_15k', '15k_to_20k' }
+      lower_middle = { '20k_to_25k', '25k_to_30k', '30k_to_35k', '35k_to_40k', '40k_to_45k', '45k_to_50k' }
+      upper_middle = { '50k_to_60k', '60k_to_75k', '75k_to_100k' }
+      high = { '100k_to_125k', '125k_to_150k', '150k_to_200k', '200k_or_more' }
+
+    We define the segregation measure using four quartiles:
+      S_res = (2/3) * sum( | proportion_in_quartile - 0.25 | ) over all quartiles.
+
+    Parameters
+    ----------
+    cbg_gdf : DataFrame (or GeoDataFrame)
+        Must have the columns for each bracket listed above.
+    
+    Returns
+    -------
+    cbg_gdf : DataFrame (copy)
+        A modified copy of the original with an added column "S_res" that holds
+        the computed segregation measure per CBG.
+    """
+
+    # Mapping from bracket columns to quartile category
+    bracket_map = {
+        'low': ['less_than_10k', '10k_15k', '15k_to_20k'],
+        'lower_middle': ['20k_to_25k', '25k_to_30k', '30k_to_35k','35k_to_40k', '40k_to_45k', '45k_to_50k'],
+        'upper_middle': ['50k_to_60k', '60k_to_75k', '75k_to_100k'],
+        'high': ['100k_to_125k', '125k_to_150k','150k_to_200k', '200k_or_more']}
+
+    def compute_s_res_for_row(row):
+        q_pops = []
+        total_pop = 0.0
+        for category in ['low', 'lower_middle', 'upper_middle', 'high']:
+            cat_sum = 0.0
+            for bracket_col in bracket_map[category]:
+                cat_sum += float(row.get(bracket_col, 0.0))
+            q_pops.append(cat_sum)
+            total_pop += cat_sum
+
+        if total_pop == 0:
+            return np.nan
+
+        proportions = [pop / total_pop for pop in q_pops]
+        s_res = (2.0 / 3.0) * sum(abs(p - 0.25) for p in proportions)
+        return s_res
+
+    new_gdf = cbg_gdf.copy()
+    new_gdf["S_res"] = new_gdf.apply(compute_s_res_for_row, axis=1)
+    new_gdf.dropna(subset=['Si','S_res'],inplace=True,ignore_index=True)
+    return new_gdf
 def compute_income_segregation(df, cbg_gdf):
     """
     For each POI (i.e. each row in df), compute an income segregation score
