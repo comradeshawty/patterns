@@ -155,7 +155,7 @@ def normalize_cbg_data(cbg_gdf):
             cbg_gdf[col + "_frac"] = cbg_gdf[col] / cbg_gdf["pop_in_hh"].replace(0, pd.NA)
     return cbg_gdf
 
-def compute_weighted_mean(df_m, cbg_gdf, columns, adjusted_cbg_visitors_col='adjusted_cbg_visitors',weighted_means_col):
+def compute_weighted_mean(df_m, cbg_gdf, columns,weighted_means_col, adjusted_cbg_visitors_col='adjusted_cbg_visitors'):
     cbg_dict = cbg_gdf.set_index('cbg')[columns].to_dict(orient='index')
 
     def get_weighted_mean(adjusted_cbg_counter, column):
